@@ -24,6 +24,8 @@ let isConnected = false;
 let messageListener = null;
 let isAdmin = false;
 let isCreator = false;
+let loadedMessages = new Set();
+let activeChatId = null;
 
 // DOM
 const authScreen = document.getElementById('auth-screen');
@@ -93,31 +95,116 @@ auth.onAuthStateChanged(async (user) => {
 });
 
 // ============================================
-// 2. ГЛОБАЛЬНЫЙ СЛУШАТЕЛЬ
+// 2. ФОРМАТИРОВАНИЕ ДАТЫ
+// ============================================
+
+function formatDate(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    if (msgDate.getTime() === today.getTime()) {
+        return 'Сегодня';
+    } else if (msgDate.getTime() === yesterday.getTime()) {
+        return 'Вчера';
+    } else {
+        const options = { day: 'numeric', month: 'long', year: 'numeric' };
+        return date.toLocaleDateString('ru-RU', options);
+    }
+}
+
+function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ============================================
+// 3. ОТОБРАЖЕНИЕ СООБЩЕНИЙ
+// ============================================
+
+function addDateSeparator(dateStr) {
+    const container = document.getElementById('messages-container');
+    if (!container) return;
+    
+    const div = document.createElement('div');
+    div.className = 'date-separator';
+    div.textContent = dateStr;
+    container.appendChild(div);
+}
+
+function appendMessage(text, dir, timestamp) {
+    const container = document.getElementById('messages-container');
+    if (!container) return;
+    
+    const msgKey = text + timestamp + dir;
+    if (loadedMessages.has(msgKey)) return;
+    loadedMessages.add(msgKey);
+    
+    const dateStr = formatDate(timestamp);
+    
+    const separators = container.querySelectorAll('.date-separator');
+    let lastSeparator = separators[separators.length - 1];
+    
+    if (!lastSeparator || lastSeparator.textContent !== dateStr) {
+        addDateSeparator(dateStr);
+    }
+    
+    const div = document.createElement('div');
+    div.className = 'message ' + dir;
+    const timeStr = formatTime(timestamp);
+    div.innerHTML = `
+        <div>${escapeHTML(text)}</div>
+        <div class="message-time">${timeStr}</div>
+    `;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+function escapeHTML(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+// ============================================
+// 4. ГЛОБАЛЬНЫЙ СЛУШАТЕЛЬ (АВТОМАТИЧЕСКИЙ ПРИЕМ)
 // ============================================
 
 function listenForGlobalMessages() {
+    // Слушаем ВСЕ входящие сообщения
     database.ref('messages/' + myId).on('child_added', (snapshot) => {
         const data = snapshot.val();
         const fromId = snapshot.key;
         
-        console.log('📩 Новое сообщение от:', fromId, data);
+        if (!data || !data.text) return;
         
-        if (data && data.text) {
-            // Если это наш собеседник - показываем
-            if (fromId === remoteId) {
-                appendMessage(data.text, 'in');
-                updateLastMessage(remoteId, data.text);
-                showNotification(`📩 ${data.name || 'Собеседник'}: ${data.text.substring(0, 30)}`);
+        console.log('📩 Новое сообщение от:', fromId, data.text);
+        
+        // Если это наш собеседник - показываем в чате
+        if (fromId === remoteId || fromId === activeChatId) {
+            // Если чат открыт - показываем сразу
+            const dir = data.from === myId ? 'out' : 'in';
+            appendMessage(data.text, dir, data.timestamp || Date.now());
+            updateLastMessage(fromId, data.text);
+        }
+        
+        // Сохраняем чат в списке
+        database.ref('users/' + fromId).once('value', (snap) => {
+            const user = snap.val();
+            if (user) {
+                saveChat(fromId, user.name, user.avatar);
+                // Обновляем последнее сообщение в списке чатов
+                updateLastMessage(fromId, data.text);
             }
-            
-            // Сохраняем чат
-            database.ref('users/' + fromId).once('value', (snap) => {
-                const user = snap.val();
-                if (user) {
-                    saveChat(fromId, user.name, user.avatar);
-                }
-            });
+        });
+        
+        // Уведомление
+        if (fromId !== myId) {
+            showNotification(`📩 ${data.name || 'Собеседник'}: ${data.text.substring(0, 30)}`);
         }
     });
 }
@@ -156,39 +243,68 @@ style.textContent = `
         from { transform: translateX(100px); opacity: 0; }
         to { transform: translateX(0); opacity: 1; }
     }
+    .date-separator {
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 12px;
+        padding: 8px 0;
+        margin: 4px 0;
+    }
 `;
 document.head.appendChild(style);
 
 // ============================================
-// 3. ОТОБРАЖЕНИЕ СООБЩЕНИЙ
+// 5. ЗАГРУЗКА ИСТОРИИ
 // ============================================
 
-function appendMessage(text, dir) {
+function loadFullHistory(peerId) {
     const container = document.getElementById('messages-container');
-    if (!container) {
-        console.error('❌ messages-container не найден!');
-        return;
-    }
+    if (!container) return;
     
-    const div = document.createElement('div');
-    div.className = 'message ' + dir;
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    div.innerHTML = `
-        <div>${escapeHTML(text)}</div>
-        <div class="message-time">${time}</div>
-    `;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-}
-
-function escapeHTML(str) {
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
+    container.innerHTML = '';
+    loadedMessages.clear();
+    activeChatId = peerId;
+    
+    database.ref('messages/' + myId + '/' + peerId).once('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            const messages = Object.values(data).sort((a, b) => a.timestamp - b.timestamp);
+            
+            let lastDate = '';
+            messages.forEach(msg => {
+                if (msg && msg.text) {
+                    const dir = msg.from === myId ? 'out' : 'in';
+                    const dateStr = formatDate(msg.timestamp);
+                    
+                    if (dateStr !== lastDate) {
+                        addDateSeparator(dateStr);
+                        lastDate = dateStr;
+                    }
+                    
+                    const div = document.createElement('div');
+                    div.className = 'message ' + dir;
+                    const timeStr = formatTime(msg.timestamp);
+                    div.innerHTML = `
+                        <div>${escapeHTML(msg.text)}</div>
+                        <div class="message-time">${timeStr}</div>
+                    `;
+                    container.appendChild(div);
+                    
+                    const msgKey = msg.text + msg.timestamp + dir;
+                    loadedMessages.add(msgKey);
+                }
+            });
+            
+            console.log(`📚 Загружено ${messages.length} сообщений`);
+            container.scrollTop = container.scrollHeight;
+        } else {
+            console.log('📭 Нет истории сообщений');
+        }
+    });
 }
 
 // ============================================
-// 4. ЧАТЫ
+// 6. ЧАТЫ
 // ============================================
 
 function loadChats() {
@@ -249,104 +365,21 @@ function updateLastMessage(peerId, text) {
 }
 
 // ============================================
-// 5. ПОДКЛЮЧЕНИЕ + ИСТОРИЯ
+// 7. ОТКРЫТИЕ ЧАТА (БЕЗ КНОПКИ "ПОДКЛЮЧИТЬСЯ")
 // ============================================
-
-btnConnect.addEventListener('click', async () => {
-    const targetId = peerIdInput.value.trim();
-    if (!targetId) {
-        alert('❌ Введите ID');
-        return;
-    }
-    if (targetId === myId) {
-        alert('❌ Нельзя к себе');
-        return;
-    }
-    
-    if (await checkBanned(targetId)) {
-        alert('❌ Этот пользователь забанен!');
-        return;
-    }
-    if (await checkBanned(myId)) {
-        alert('❌ Вы забанены!');
-        return;
-    }
-    
-    const snap = await database.ref('users/' + targetId).once('value');
-    if (!snap.exists()) {
-        alert('❌ Пользователь не найден');
-        return;
-    }
-    
-    remoteId = targetId;
-    isConnected = true;
-    
-    const user = snap.val();
-    saveChat(targetId, user.name, user.avatar);
-    showChatUI(targetId);
-    loadFullHistory(targetId); // ЗАГРУЖАЕМ ВСЮ ИСТОРИЮ
-    
-    if (chatStatusText) chatStatusText.textContent = 'Онлайн ✅';
-    if (statusDot) statusDot.className = 'status-dot online';
-});
 
 function openChat(peerId) {
     if (isConnected && remoteId === peerId) return;
     
     remoteId = peerId;
     isConnected = true;
+    activeChatId = peerId;
     peerIdInput.value = peerId;
     showChatUI(peerId);
-    loadFullHistory(peerId); // ЗАГРУЖАЕМ ВСЮ ИСТОРИЮ
+    loadFullHistory(peerId);
     
     if (chatStatusText) chatStatusText.textContent = 'Онлайн ✅';
     if (statusDot) statusDot.className = 'status-dot online';
-}
-
-// ============================================
-// 6. ЗАГРУЗКА ВСЕЙ ИСТОРИИ (ФИКС!)
-// ============================================
-
-function loadFullHistory(peerId) {
-    const container = document.getElementById('messages-container');
-    if (!container) return;
-    
-    // Очищаем контейнер
-    container.innerHTML = '';
-    
-    // Сначала загружаем ВСЕ старые сообщения
-    database.ref('messages/' + myId + '/' + peerId).once('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            // Сортируем по времени
-            const messages = Object.values(data).sort((a, b) => a.timestamp - b.timestamp);
-            messages.forEach(msg => {
-                if (msg && msg.text) {
-                    const dir = msg.from === myId ? 'out' : 'in';
-                    appendMessage(msg.text, dir);
-                }
-            });
-            console.log(`📚 Загружено ${messages.length} сообщений из истории`);
-        } else {
-            console.log('📭 Нет истории сообщений');
-        }
-    });
-    
-    // Потом подписываемся на НОВЫЕ сообщения
-    if (messageListener) {
-        messageListener.off();
-        messageListener = null;
-    }
-    
-    messageListener = database.ref('messages/' + myId + '/' + peerId);
-    messageListener.on('child_added', (snapshot) => {
-        const data = snapshot.val();
-        if (data && data.text && data.from !== myId) {
-            // Проверяем что это не дубль (уже есть в истории)
-            appendMessage(data.text, 'in');
-            updateLastMessage(peerId, data.text);
-        }
-    });
 }
 
 function showChatUI(peerId) {
@@ -355,8 +388,6 @@ function showChatUI(peerId) {
     if (inputArea) inputArea.style.display = 'flex';
     if (chatName) chatName.textContent = 'Подключение...';
     if (chatAvatar) chatAvatar.src = '';
-    
-    // НЕ ОЧИЩАЕМ КОНТЕЙНЕР ЗДЕСЬ - очистка в loadFullHistory
     
     database.ref('users/' + peerId).once('value', async (snap) => {
         const user = snap.val();
@@ -391,7 +422,42 @@ function showChatUI(peerId) {
 }
 
 // ============================================
-// 7. ОТПРАВКА
+// 8. КНОПКА "ПОДКЛЮЧИТЬСЯ" (ДЛЯ НОВЫХ ЧАТОВ)
+// ============================================
+
+btnConnect.addEventListener('click', async () => {
+    const targetId = peerIdInput.value.trim();
+    if (!targetId) {
+        alert('❌ Введите ID');
+        return;
+    }
+    if (targetId === myId) {
+        alert('❌ Нельзя к себе');
+        return;
+    }
+    
+    if (await checkBanned(targetId)) {
+        alert('❌ Этот пользователь забанен!');
+        return;
+    }
+    if (await checkBanned(myId)) {
+        alert('❌ Вы забанены!');
+        return;
+    }
+    
+    const snap = await database.ref('users/' + targetId).once('value');
+    if (!snap.exists()) {
+        alert('❌ Пользователь не найден');
+        return;
+    }
+    
+    const user = snap.val();
+    saveChat(targetId, user.name, user.avatar);
+    openChat(targetId);
+});
+
+// ============================================
+// 9. ОТПРАВКА
 // ============================================
 
 btnSend.addEventListener('click', () => {
@@ -407,7 +473,6 @@ btnSend.addEventListener('click', () => {
     
     const timestamp = Date.now();
     
-    // Отправляем собеседнику
     database.ref('messages/' + remoteId + '/' + myId).push().set({
         from: myId,
         text: text,
@@ -415,7 +480,6 @@ btnSend.addEventListener('click', () => {
         timestamp: timestamp
     });
     
-    // Сохраняем у себя
     database.ref('messages/' + myId + '/' + remoteId).push().set({
         from: myId,
         text: text,
@@ -423,7 +487,7 @@ btnSend.addEventListener('click', () => {
         timestamp: timestamp
     });
     
-    appendMessage(text, 'out');
+    appendMessage(text, 'out', timestamp);
     updateLastMessage(remoteId, text);
     messageInput.value = '';
 });
@@ -433,7 +497,7 @@ messageInput.addEventListener('keypress', (e) => {
 });
 
 // ============================================
-// 8. РОЛИ
+// 10. РОЛИ
 // ============================================
 
 async function checkAdminStatus() {
@@ -590,7 +654,7 @@ async function checkBanned(userId) {
 }
 
 // ============================================
-// 9. ПРОФИЛЬ
+// 11. ПРОФИЛЬ
 // ============================================
 
 document.getElementById('chat-header-click')?.addEventListener('click', () => {
@@ -637,4 +701,4 @@ document.getElementById('profile-modal')?.addEventListener('click', (e) => {
     }
 });
 
-console.log('✅ App.js загружен! (с историей)');
+console.log('✅ App.js загружен! (автоматический прием сообщений)');
