@@ -20,11 +20,7 @@ const database = firebase.database();
 let currentUser = null;
 let myId = null;
 let remoteId = null;
-let peerConnection = null;
-let dataChannel = null;
 let isConnected = false;
-let isCaller = false;
-let reconnectAttempts = 0;
 
 // DOM
 const authScreen = document.getElementById('auth-screen');
@@ -83,7 +79,6 @@ auth.onAuthStateChanged((user) => {
         });
         
         loadChats();
-        listenForCalls();
         
     } else {
         authScreen.style.display = 'flex';
@@ -92,259 +87,7 @@ auth.onAuthStateChanged((user) => {
 });
 
 // ============================================
-// 2. WEBRTC С TURN
-// ============================================
-
-// ИСПОЛЬЗУЕМ ТОЛЬКО РАБОЧИЕ TURN СЕРВЕРА
-const rtcConfig = {
-    iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        // РАБОЧИЙ TURN СЕРВЕР
-        {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        }
-    ],
-    iceCandidatePoolSize: 10
-};
-
-function listenForCalls() {
-    database.ref('calls/' + myId).remove();
-    
-    database.ref('calls/' + myId).on('child_added', async (snapshot) => {
-        const data = snapshot.val();
-        const callerId = snapshot.key;
-        
-        if (!data || !data.type || callerId === myId) return;
-        if (isConnected) return;
-        
-        console.log('📞 Входящий вызов от:', callerId, 'тип:', data.type);
-        
-        try {
-            if (data.type === 'offer') {
-                remoteId = callerId;
-                await handleOffer(callerId, data);
-            } else if (data.type === 'answer' && isCaller) {
-                await handleAnswer(data);
-            } else if (data.type === 'candidate') {
-                if (peerConnection) {
-                    try {
-                        const candidate = new RTCIceCandidate(data.candidate);
-                        await peerConnection.addIceCandidate(candidate);
-                        console.log('✅ ICE кандидат добавлен');
-                    } catch(e) {
-                        console.log('Ошибка ICE:', e);
-                    }
-                }
-            }
-        } catch(e) {
-            console.error('Ошибка:', e);
-        }
-    });
-}
-
-async function handleOffer(callerId, data) {
-    try {
-        console.log('📞 Обработка входящего...');
-        
-        peerConnection = new RTCPeerConnection(rtcConfig);
-        
-        peerConnection.ondatachannel = (event) => {
-            console.log('📡 Data channel получен');
-            dataChannel = event.channel;
-            setupDataChannel();
-        };
-        
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                console.log('📤 Отправка ICE кандидата');
-                database.ref('calls/' + callerId + '/' + myId).set({
-                    type: 'candidate',
-                    candidate: event.candidate
-                });
-            }
-        };
-        
-        peerConnection.oniceconnectionstatechange = () => {
-            const state = peerConnection.iceConnectionState;
-            console.log('🔄 ICE состояние:', state);
-            if (state === 'connected') {
-                console.log('✅ ICE соединен!');
-            } else if (state === 'failed') {
-                console.log('❌ ICE failed');
-                // Пробуем переподключиться
-                if (reconnectAttempts < 3) {
-                    reconnectAttempts++;
-                    setTimeout(() => {
-                        if (peerConnection) {
-                            try { peerConnection.restartIce(); } catch(e) {}
-                        }
-                    }, 2000);
-                }
-            }
-        };
-        
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        
-        await database.ref('calls/' + callerId + '/' + myId).set({
-            type: 'answer',
-            sdp: answer
-        });
-        
-        remoteId = callerId;
-        showChatUI(callerId);
-        saveChat(callerId);
-        
-    } catch(e) {
-        console.error('Ошибка ответа:', e);
-        resetChat();
-    }
-}
-
-async function handleAnswer(data) {
-    try {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
-        console.log('✅ Remote description установлен');
-    } catch(e) {
-        console.error('Ошибка:', e);
-    }
-}
-
-function setupDataChannel() {
-    if (!dataChannel) return;
-    
-    dataChannel.onopen = () => {
-        console.log('✅ КАНАЛ ОТКРЫТ!');
-        isConnected = true;
-        reconnectAttempts = 0;
-        if (chatStatusText) chatStatusText.textContent = 'Подключено ✅';
-        if (statusDot) statusDot.className = 'status-dot online';
-        showChatUI(remoteId);
-    };
-    
-    dataChannel.onclose = () => {
-        console.log('🔌 Канал закрыт');
-        isConnected = false;
-        resetChat();
-    };
-    
-    dataChannel.onerror = (error) => {
-        console.error('❌ Ошибка канала:', error);
-    };
-    
-    dataChannel.onmessage = async (event) => {
-        try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'message') {
-                appendMessage(data.text, 'in');
-                updateLastMessage(remoteId, data.text);
-            }
-        } catch(e) {
-            console.error('Ошибка сообщения:', e);
-        }
-    };
-}
-
-// ============================================
-// 3. ВЫЗОВ СОБЕСЕДНИКА
-// ============================================
-
-btnConnect.addEventListener('click', async () => {
-    const targetId = peerIdInput.value.trim();
-    if (!targetId) {
-        alert('❌ Введите ID');
-        return;
-    }
-    if (targetId === myId) {
-        alert('❌ Нельзя к себе');
-        return;
-    }
-    if (isConnected) {
-        alert('❌ Уже есть соединение');
-        return;
-    }
-    
-    const snap = await database.ref('users/' + targetId).once('value');
-    if (!snap.exists()) {
-        alert('❌ Пользователь не найден');
-        return;
-    }
-    
-    await database.ref('calls/' + targetId + '/' + myId).remove();
-    await database.ref('calls/' + myId).remove();
-    
-    remoteId = targetId;
-    isCaller = true;
-    reconnectAttempts = 0;
-    
-    try {
-        peerConnection = new RTCPeerConnection(rtcConfig);
-        
-        dataChannel = peerConnection.createDataChannel('chat');
-        setupDataChannel();
-        
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                console.log('📤 Отправка ICE кандидата');
-                database.ref('calls/' + targetId + '/' + myId).set({
-                    type: 'candidate',
-                    candidate: event.candidate
-                });
-            }
-        };
-        
-        peerConnection.oniceconnectionstatechange = () => {
-            const state = peerConnection.iceConnectionState;
-            console.log('🔄 ICE состояние:', state);
-            if (state === 'connected') {
-                console.log('✅ ICE соединен!');
-            } else if (state === 'failed') {
-                console.log('❌ ICE failed');
-                if (reconnectAttempts < 3) {
-                    reconnectAttempts++;
-                    setTimeout(() => {
-                        if (peerConnection) {
-                            try { peerConnection.restartIce(); } catch(e) {}
-                        }
-                    }, 2000);
-                }
-            }
-        };
-        
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        
-        await database.ref('calls/' + targetId + '/' + myId).set({
-            type: 'offer',
-            sdp: offer
-        });
-        
-        const user = snap.val();
-        saveChat(targetId);
-        showChatUI(targetId);
-        
-    } catch(e) {
-        console.error('Ошибка:', e);
-        alert('❌ Ошибка: ' + e.message);
-        resetChat();
-    }
-});
-
-// ============================================
-// 4. ЧАТЫ
+// 2. ЧАТЫ
 // ============================================
 
 function loadChats() {
@@ -401,21 +144,47 @@ function updateLastMessage(peerId, text) {
     });
 }
 
+// ============================================
+// 3. ПОДКЛЮЧЕНИЕ К СОБЕСЕДНИКУ
+// ============================================
+
+btnConnect.addEventListener('click', async () => {
+    const targetId = peerIdInput.value.trim();
+    if (!targetId) {
+        alert('❌ Введите ID');
+        return;
+    }
+    if (targetId === myId) {
+        alert('❌ Нельзя к себе');
+        return;
+    }
+    
+    const snap = await database.ref('users/' + targetId).once('value');
+    if (!snap.exists()) {
+        alert('❌ Пользователь не найден');
+        return;
+    }
+    
+    remoteId = targetId;
+    isConnected = true;
+    
+    const user = snap.val();
+    saveChat(targetId);
+    showChatUI(targetId);
+    listenMessages(targetId);
+    
+    if (chatStatusText) chatStatusText.textContent = 'Онлайн ✅';
+    if (statusDot) statusDot.className = 'status-dot online';
+});
+
 function openChat(peerId) {
     if (isConnected && remoteId === peerId) return;
     
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-    }
-    dataChannel = null;
-    isConnected = false;
-    isCaller = false;
-    reconnectAttempts = 0;
-    
     remoteId = peerId;
+    isConnected = true;
     peerIdInput.value = peerId;
     showChatUI(peerId);
+    listenMessages(peerId);
     btnConnect.click();
 }
 
@@ -441,8 +210,19 @@ function showChatUI(peerId) {
 }
 
 // ============================================
-// 5. ОТПРАВКА СООБЩЕНИЙ
+// 4. СООБЩЕНИЯ
 // ============================================
+
+function listenMessages(peerId) {
+    // Слушаем сообщения от собеседника
+    database.ref('messages/' + myId + '/' + peerId).on('child_added', (snapshot) => {
+        const data = snapshot.val();
+        if (data && data.from !== myId) {
+            appendMessage(data.text, 'in');
+            updateLastMessage(peerId, data.text);
+        }
+    });
+}
 
 btnSend.addEventListener('click', () => {
     const text = messageInput.value.trim();
@@ -450,15 +230,27 @@ btnSend.addEventListener('click', () => {
         alert('❌ Введите сообщение');
         return;
     }
-    if (!dataChannel || dataChannel.readyState !== 'open') {
-        alert('❌ Соединение не установлено');
+    if (!remoteId) {
+        alert('❌ Нет собеседника');
         return;
     }
     
-    dataChannel.send(JSON.stringify({
-        type: 'message',
-        text: text
-    }));
+    // Сохраняем сообщение для собеседника
+    const messageRef = database.ref('messages/' + remoteId + '/' + myId).push();
+    messageRef.set({
+        from: myId,
+        text: text,
+        timestamp: Date.now()
+    });
+    
+    // Сохраняем для себя
+    const myMessageRef = database.ref('messages/' + myId + '/' + remoteId).push();
+    myMessageRef.set({
+        from: myId,
+        text: text,
+        timestamp: Date.now()
+    });
+    
     appendMessage(text, 'out');
     updateLastMessage(remoteId, text);
     messageInput.value = '';
@@ -469,7 +261,7 @@ messageInput.addEventListener('keypress', (e) => {
 });
 
 // ============================================
-// 6. ОТОБРАЖЕНИЕ
+// 5. ОТОБРАЖЕНИЕ
 // ============================================
 
 function appendMessage(text, dir) {
@@ -485,30 +277,7 @@ function appendMessage(text, dir) {
 }
 
 // ============================================
-// 7. RESET
-// ============================================
-
-function resetChat() {
-    if (peerConnection) {
-        try { peerConnection.close(); } catch(e) {}
-        peerConnection = null;
-    }
-    dataChannel = null;
-    isConnected = false;
-    
-    if (chatStatusText) chatStatusText.textContent = 'Офлайн';
-    if (statusDot) statusDot.className = 'status-dot offline';
-    
-    if (myId) {
-        database.ref('calls/' + myId).remove();
-    }
-    if (remoteId) {
-        database.ref('calls/' + remoteId + '/' + myId).remove();
-    }
-}
-
-// ============================================
-// 8. ПРОФИЛЬ
+// 6. ПРОФИЛЬ
 // ============================================
 
 document.getElementById('chat-header-click')?.addEventListener('click', () => {
@@ -551,4 +320,4 @@ document.getElementById('profile-modal')?.addEventListener('click', (e) => {
     }
 });
 
-console.log('✅ App.js загружен! (упрощенная версия)');
+console.log('✅ App.js загружен! (Firebase Database чат)');
