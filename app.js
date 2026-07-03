@@ -22,13 +22,9 @@ let myId = null;
 let remoteId = null;
 let peerConnection = null;
 let dataChannel = null;
-let sharedSecretKey = null;
-let myKeyPair = null;
 let isConnected = false;
 let isCaller = false;
-let connectionTimeout = null;
 let reconnectAttempts = 0;
-const MAX_RECONNECT = 3;
 
 // DOM
 const authScreen = document.getElementById('auth-screen');
@@ -77,7 +73,7 @@ auth.onAuthStateChanged((user) => {
         myIdDisplay.textContent = `ID: ${myId.substring(0, 12)} (клик)`;
         myIdDisplay.onclick = () => {
             navigator.clipboard.writeText(myId.substring(0, 12));
-            showNotification('✅ ID скопирован!');
+            alert('✅ ID скопирован!');
         };
         
         database.ref('users/' + myId).set({
@@ -96,134 +92,31 @@ auth.onAuthStateChanged((user) => {
 });
 
 // ============================================
-// 2. УВЕДОМЛЕНИЯ
+// 2. WEBRTC С TURN
 // ============================================
 
-function showNotification(text, isError = false) {
-    const notif = document.createElement('div');
-    notif.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${isError ? '#dc3545' : '#2b5278'};
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        z-index: 9999;
-        font-size: 14px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        animation: slideIn 0.3s ease;
-        max-width: 300px;
-        cursor: pointer;
-    `;
-    notif.textContent = text;
-    notif.onclick = () => notif.remove();
-    document.body.appendChild(notif);
-    
-    setTimeout(() => {
-        notif.style.opacity = '0';
-        notif.style.transition = 'opacity 0.3s';
-        setTimeout(() => notif.remove(), 300);
-    }, 5000);
-}
-
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideIn {
-        from { transform: translateX(100px); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-`;
-document.head.appendChild(style);
-
-// ============================================
-// 3. КРИПТОГРАФИЯ
-// ============================================
-
-async function generateKeys() {
-    return await window.crypto.subtle.generateKey(
-        { name: "ECDH", namedCurve: "P-256" },
-        false,
-        ["deriveKey", "deriveBits"]
-    );
-}
-
-async function exportKey(key) {
-    return await window.crypto.subtle.exportKey("raw", key);
-}
-
-async function importKey(raw) {
-    return await window.crypto.subtle.importKey(
-        "raw",
-        raw,
-        { name: "ECDH", namedCurve: "P-256" },
-        true,
-        []
-    );
-}
-
-async function deriveKey(privateKey, publicKey) {
-    return await window.crypto.subtle.deriveKey(
-        { name: "ECDH", public: publicKey },
-        privateKey,
-        { name: "AES-GCM", length: 256 },
-        true,
-        ["encrypt", "decrypt"]
-    );
-}
-
-async function encrypt(text, key) {
-    const enc = new TextEncoder();
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await window.crypto.subtle.encrypt(
-        { name: "AES-GCM", iv: iv },
-        key,
-        enc.encode(text)
-    );
-    return { iv: Array.from(iv), data: Array.from(new Uint8Array(encrypted)) };
-}
-
-async function decrypt(obj, key) {
-    try {
-        const decrypted = await window.crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: new Uint8Array(obj.iv) },
-            key,
-            new Uint8Array(obj.data)
-        );
-        return new TextDecoder().decode(decrypted);
-    } catch(e) { 
-        return '[Ошибка расшифровки]'; 
-    }
-}
-
-// ============================================
-// 4. WEBRTC С TURN
-// ============================================
-
+// ИСПОЛЬЗУЕМ ТОЛЬКО РАБОЧИЕ TURN СЕРВЕРА
 const rtcConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        // TURN сервера (обход NAT)
+        // РАБОЧИЙ TURN СЕРВЕР
         {
-            urls: [
-                'turn:relay1.expressturn.com:3478',
-                'turn:relay1.expressturn.com:3478?transport=tcp'
-            ],
-            username: 'efhfghjkgfhfghj',
-            credential: 'gfjhfgjhfgjhfgj'
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
         },
         {
-            urls: [
-                'turn:turn.anyfirewall.com:443?transport=tcp',
-                'turn:turn.anyfirewall.com:443'
-            ],
-            username: 'webrtc',
-            credential: 'webrtc'
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
         }
     ],
-    iceCandidatePoolSize: 10,
-    iceTransportPolicy: 'all'
+    iceCandidatePoolSize: 10
 };
 
 function listenForCalls() {
@@ -263,9 +156,8 @@ function listenForCalls() {
 
 async function handleOffer(callerId, data) {
     try {
-        showNotification(`📞 Входящий вызов...`);
+        console.log('📞 Обработка входящего...');
         
-        myKeyPair = await generateKeys();
         peerConnection = new RTCPeerConnection(rtcConfig);
         
         peerConnection.ondatachannel = (event) => {
@@ -291,19 +183,15 @@ async function handleOffer(callerId, data) {
                 console.log('✅ ICE соединен!');
             } else if (state === 'failed') {
                 console.log('❌ ICE failed');
-                showNotification('❌ Ошибка ICE соединения', true);
                 // Пробуем переподключиться
-                if (reconnectAttempts < MAX_RECONNECT) {
+                if (reconnectAttempts < 3) {
                     reconnectAttempts++;
-                    console.log(`🔄 Переподключение ${reconnectAttempts}/${MAX_RECONNECT}`);
                     setTimeout(() => {
                         if (peerConnection) {
                             try { peerConnection.restartIce(); } catch(e) {}
                         }
                     }, 2000);
                 }
-            } else if (state === 'disconnected') {
-                console.log('⚠️ ICE отключен');
             }
         };
         
@@ -322,7 +210,6 @@ async function handleOffer(callerId, data) {
         
     } catch(e) {
         console.error('Ошибка ответа:', e);
-        showNotification('❌ Ошибка соединения', true);
         resetChat();
     }
 }
@@ -343,51 +230,27 @@ function setupDataChannel() {
         console.log('✅ КАНАЛ ОТКРЫТ!');
         isConnected = true;
         reconnectAttempts = 0;
-        showNotification('✅ Соединение установлено!');
         if (chatStatusText) chatStatusText.textContent = 'Подключено ✅';
         if (statusDot) statusDot.className = 'status-dot online';
-        renderChatLayout();
-        sendHandshake();
-        
-        if (connectionTimeout) {
-            clearTimeout(connectionTimeout);
-            connectionTimeout = null;
-        }
+        showChatUI(remoteId);
     };
     
     dataChannel.onclose = () => {
         console.log('🔌 Канал закрыт');
         isConnected = false;
-        showNotification('🔌 Соединение разорвано', true);
         resetChat();
     };
     
     dataChannel.onerror = (error) => {
         console.error('❌ Ошибка канала:', error);
-        showNotification('❌ Ошибка канала', true);
     };
     
     dataChannel.onmessage = async (event) => {
         try {
             const data = JSON.parse(event.data);
-            
-            if (data.type === 'HANDSHAKE') {
-                const pubKey = await importKey(new Uint8Array(data.key));
-                sharedSecretKey = await deriveKey(myKeyPair.privateKey, pubKey);
-                showNotification('🔑 Ключ шифрования установлен!');
-                console.log('🔑 Ключ шифрования установлен!');
-                
-            } else if (data.type === 'MESSAGE') {
-                if (!sharedSecretKey) return;
-                const text = await decrypt(data.encrypted, sharedSecretKey);
-                appendMessage(text, 'in');
-                updateLastMessage(remoteId, text);
-                
-            } else if (data.type === 'IMAGE') {
-                if (!sharedSecretKey) return;
-                const img = await decrypt(data.encrypted, sharedSecretKey);
-                appendImage(img, 'in');
-                updateLastMessage(remoteId, '📷 Изображение');
+            if (data.type === 'message') {
+                appendMessage(data.text, 'in');
+                updateLastMessage(remoteId, data.text);
             }
         } catch(e) {
             console.error('Ошибка сообщения:', e);
@@ -395,41 +258,28 @@ function setupDataChannel() {
     };
 }
 
-async function sendHandshake() {
-    if (!dataChannel || dataChannel.readyState !== 'open') {
-        setTimeout(sendHandshake, 500);
-        return;
-    }
-    
-    const raw = await exportKey(myKeyPair.publicKey);
-    dataChannel.send(JSON.stringify({
-        type: 'HANDSHAKE',
-        key: Array.from(new Uint8Array(raw))
-    }));
-}
-
 // ============================================
-// 5. ВЫЗОВ СОБЕСЕДНИКА
+// 3. ВЫЗОВ СОБЕСЕДНИКА
 // ============================================
 
 btnConnect.addEventListener('click', async () => {
     const targetId = peerIdInput.value.trim();
     if (!targetId) {
-        showNotification('❌ Введите ID', true);
+        alert('❌ Введите ID');
         return;
     }
     if (targetId === myId) {
-        showNotification('❌ Нельзя к себе', true);
+        alert('❌ Нельзя к себе');
         return;
     }
     if (isConnected) {
-        showNotification('❌ Уже есть соединение', true);
+        alert('❌ Уже есть соединение');
         return;
     }
     
     const snap = await database.ref('users/' + targetId).once('value');
     if (!snap.exists()) {
-        showNotification('❌ Пользователь не найден', true);
+        alert('❌ Пользователь не найден');
         return;
     }
     
@@ -439,10 +289,8 @@ btnConnect.addEventListener('click', async () => {
     remoteId = targetId;
     isCaller = true;
     reconnectAttempts = 0;
-    showNotification(`📞 Звонок...`);
     
     try {
-        myKeyPair = await generateKeys();
         peerConnection = new RTCPeerConnection(rtcConfig);
         
         dataChannel = peerConnection.createDataChannel('chat');
@@ -465,17 +313,13 @@ btnConnect.addEventListener('click', async () => {
                 console.log('✅ ICE соединен!');
             } else if (state === 'failed') {
                 console.log('❌ ICE failed');
-                if (reconnectAttempts < MAX_RECONNECT) {
+                if (reconnectAttempts < 3) {
                     reconnectAttempts++;
-                    console.log(`🔄 Переподключение ${reconnectAttempts}/${MAX_RECONNECT}`);
                     setTimeout(() => {
                         if (peerConnection) {
                             try { peerConnection.restartIce(); } catch(e) {}
                         }
                     }, 2000);
-                } else {
-                    showNotification('❌ Не удалось соединиться', true);
-                    resetChat();
                 }
             }
         };
@@ -492,22 +336,15 @@ btnConnect.addEventListener('click', async () => {
         saveChat(targetId);
         showChatUI(targetId);
         
-        connectionTimeout = setTimeout(() => {
-            if (!isConnected) {
-                showNotification('⏰ Таймаут, попробуйте еще раз', true);
-                resetChat();
-            }
-        }, 45000);
-        
     } catch(e) {
         console.error('Ошибка:', e);
-        showNotification('❌ Ошибка: ' + e.message, true);
+        alert('❌ Ошибка: ' + e.message);
         resetChat();
     }
 });
 
 // ============================================
-// 6. ЧАТЫ
+// 4. ЧАТЫ
 // ============================================
 
 function loadChats() {
@@ -573,14 +410,8 @@ function openChat(peerId) {
     }
     dataChannel = null;
     isConnected = false;
-    sharedSecretKey = null;
     isCaller = false;
     reconnectAttempts = 0;
-    
-    if (connectionTimeout) {
-        clearTimeout(connectionTimeout);
-        connectionTimeout = null;
-    }
     
     remoteId = peerId;
     peerIdInput.value = peerId;
@@ -609,47 +440,28 @@ function showChatUI(peerId) {
     if (item) item.classList.add('active');
 }
 
-function renderChatLayout() {
-    database.ref('users/' + remoteId).once('value', (snap) => {
-        const user = snap.val();
-        if (user) {
-            chatName.textContent = user.name || 'Собеседник';
-            chatAvatar.src = user.avatar || '';
-        }
-    });
-}
-
 // ============================================
-// 7. ОТПРАВКА СООБЩЕНИЙ
+// 5. ОТПРАВКА СООБЩЕНИЙ
 // ============================================
 
-btnSend.addEventListener('click', async () => {
+btnSend.addEventListener('click', () => {
     const text = messageInput.value.trim();
     if (!text) {
-        showNotification('❌ Введите сообщение', true);
+        alert('❌ Введите сообщение');
         return;
     }
     if (!dataChannel || dataChannel.readyState !== 'open') {
-        showNotification('❌ Соединение не установлено', true);
-        return;
-    }
-    if (!sharedSecretKey) {
-        showNotification('❌ Ключ шифрования не установлен', true);
+        alert('❌ Соединение не установлено');
         return;
     }
     
-    try {
-        const encrypted = await encrypt(text, sharedSecretKey);
-        dataChannel.send(JSON.stringify({
-            type: 'MESSAGE',
-            encrypted: encrypted
-        }));
-        appendMessage(text, 'out');
-        updateLastMessage(remoteId, text);
-        messageInput.value = '';
-    } catch(e) {
-        showNotification('❌ Ошибка отправки', true);
-    }
+    dataChannel.send(JSON.stringify({
+        type: 'message',
+        text: text
+    }));
+    appendMessage(text, 'out');
+    updateLastMessage(remoteId, text);
+    messageInput.value = '';
 });
 
 messageInput.addEventListener('keypress', (e) => {
@@ -657,49 +469,7 @@ messageInput.addEventListener('keypress', (e) => {
 });
 
 // ============================================
-// 8. ИЗОБРАЖЕНИЯ
-// ============================================
-
-let fileInput = null;
-
-document.getElementById('btn-attach')?.addEventListener('click', () => {
-    if (!fileInput) {
-        fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = 'image/*';
-        fileInput.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (file) await sendImage(file);
-            fileInput.value = '';
-        };
-    }
-    fileInput.click();
-});
-
-async function sendImage(file) {
-    if (!dataChannel || dataChannel.readyState !== 'open') {
-        showNotification('❌ Соединение не установлено', true);
-        return;
-    }
-    
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        const imgData = e.target.result;
-        if (sharedSecretKey) {
-            const encrypted = await encrypt(imgData, sharedSecretKey);
-            dataChannel.send(JSON.stringify({
-                type: 'IMAGE',
-                encrypted: encrypted
-            }));
-            appendImage(imgData, 'out');
-            updateLastMessage(remoteId, '📷 Изображение');
-        }
-    };
-    reader.readAsDataURL(file);
-}
-
-// ============================================
-// 9. ОТОБРАЖЕНИЕ
+// 6. ОТОБРАЖЕНИЕ
 // ============================================
 
 function appendMessage(text, dir) {
@@ -707,38 +477,15 @@ function appendMessage(text, dir) {
     div.className = 'message ' + dir;
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     div.innerHTML = `
-        <div>${escapeHTML(text)}</div>
+        <div>${text}</div>
         <div class="message-time">${time}</div>
     `;
     messagesContainer.appendChild(div);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-function appendImage(src, dir) {
-    const div = document.createElement('div');
-    div.className = 'message ' + dir;
-    const img = document.createElement('img');
-    img.className = 'message-image';
-    img.src = src;
-    img.onclick = () => window.open(src);
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    div.appendChild(img);
-    const timeDiv = document.createElement('div');
-    timeDiv.className = 'message-time';
-    timeDiv.textContent = time;
-    div.appendChild(timeDiv);
-    messagesContainer.appendChild(div);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
-
-function escapeHTML(str) {
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
-}
-
 // ============================================
-// 10. RESET
+// 7. RESET
 // ============================================
 
 function resetChat() {
@@ -748,13 +495,6 @@ function resetChat() {
     }
     dataChannel = null;
     isConnected = false;
-    sharedSecretKey = null;
-    isCaller = false;
-    
-    if (connectionTimeout) {
-        clearTimeout(connectionTimeout);
-        connectionTimeout = null;
-    }
     
     if (chatStatusText) chatStatusText.textContent = 'Офлайн';
     if (statusDot) statusDot.className = 'status-dot offline';
@@ -768,7 +508,7 @@ function resetChat() {
 }
 
 // ============================================
-// 11. ПРОФИЛЬ
+// 8. ПРОФИЛЬ
 // ============================================
 
 document.getElementById('chat-header-click')?.addEventListener('click', () => {
@@ -780,7 +520,7 @@ document.getElementById('btn-profile')?.addEventListener('click', () => {
 });
 
 document.getElementById('btn-call')?.addEventListener('click', () => {
-    showNotification('📞 Функция звонков в разработке!');
+    alert('📞 Функция звонков в разработке!');
 });
 
 document.getElementById('btn-emoji')?.addEventListener('click', () => {
@@ -811,4 +551,4 @@ document.getElementById('profile-modal')?.addEventListener('click', (e) => {
     }
 });
 
-console.log('✅ App.js загружен!');
+console.log('✅ App.js загружен! (упрощенная версия)');
