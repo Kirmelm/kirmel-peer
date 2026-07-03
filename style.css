@@ -26,7 +26,7 @@ body, html {
     overflow: hidden;
 }
 
-/* Экран авторизации */
+/* ===== ЭКРАН ВХОДА ===== */
 #auth-screen {
     display: flex;
     flex-direction: column;
@@ -80,7 +80,7 @@ body, html {
     display: none;
 }
 
-/* Главный экран мессенджера */
+/* ===== ГЛАВНЫЙ ЭКРАН ===== */
 #app-screen {
     display: none;
     height: 100vh;
@@ -92,183 +92,16 @@ body, html {
     height: 100%;
 }
 
-/* Левая панель */
+/* ===== ЛЕВАЯ ПАНЕЛЬ ===== */
 .sidebar {
     width: 320px;
     background-color: var(--bg-sidebar);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
 }
 
-.header {
-    padding: 20px;
-    border-bottom: 1px solid var(--border);
-}
-
-.header h2 {
-    font-size: 20px;
-    color: var(--accent);
-    margin-bottom: 15px;
-}
-
-.user-profile {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 15px;
-}
-
-.avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    object-fit: cover;
-    background-color: var(--bg-active);
-}
-
-.user-info {
-    flex-grow: 1;
-    overflow: hidden;
-}
-
-.user-name {
-    font-weight: 600;
-    font-size: 15px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.my-id {
-    font-size: 12px;
-    color: var(--text-muted);
-    cursor: pointer;
-    user-select: all;
-}
-
-.connect-box {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.input-field {
-    background-color: var(--bg-main);
-    border: 1px solid var(--border);
-    color: var(--text-main);
-    padding: 10px;
-    border-radius: 8px;
-    font-size: 14px;
-    outline: none;
-}
-
-.input-field:focus {
-    border-color: var(--accent);
-}
-
-.chats-list {
-    flex-grow: 1;
-    overflow-y: auto;
-}
-
-.chat-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 15px;
-    cursor: pointer;
-    border-bottom: 1px solid var(--border);
-    transition: background 0.2s;
-}
-
-.chat-item:hover, .chat-item.active {
-    background-color: var(--bg-active);
-}
-
-.chat-status {
-    font-size: 12px;
-    color: #4cd964;
-}
-
-/* Правая панель */
-.main-chat {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    background-color: var(--bg-main);
-}
-
-.chat-header {
-    height: 60px;
-    padding: 0 20px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    border-bottom: 1px solid var(--border);
-    background-color: var(--bg-sidebar);
-}
-
-.messages-container {
-    flex-grow: 1;
-    padding: 20px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.message {
-    max-width: 65%;
-    padding: 10px 14px;
-    border-radius: 12px;
-    font-size: 15px;
-    line-height: 1.4;
-    word-break: break-word;
-    position: relative;
-}
-
-.message.out {
-    background-color: var(--bubble-out);
-    align-self: flex-end;
-    border-bottom-right-radius: 4px;
-}
-
-.message.in {
-    background-color: var(--bubble-in);
-    align-self: flex-start;
-    border-bottom-left-radius: 4px;
-    border: 1px solid var(--border);
-}
-
-.message-time {
-    font-size: 10px;
-    color: var(--text-muted);
-    text-align: right;
-    margin-top: 4px;
-}
-
-.chat-input-area {
-    padding: 20px;
-    background-color: var(--bg-sidebar);
-    display: flex;
-    gap: 10px;
-}
-
-.chat-input-area .input-field {
-    flex-grow: 1;
-}
-
-.system-info {
-    text-align: center;
-    color: var(--text-muted);
-    margin: auto;
-    font-size: 14px;
-}
-
-/* ===== НОВЫЕ СТИЛИ ===== */
-
-/* Левая панель */
 .sidebar-header {
     padding: 16px 20px;
     border-bottom: 1px solid var(--border);
@@ -301,6 +134,36 @@ body, html {
 
 .user-profile:hover {
     background: var(--bg-active);
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    background-color: var(--bg-active);
+    flex-shrink: 0;
+}
+
+.user-info {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.user-name {
+    font-weight: 600;
+    font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.my-id {
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: all;
 }
 
 .connect-label {
@@ -337,7 +200,21 @@ body, html {
     background: var(--accent-hover);
 }
 
-/* Список чатов */
+.input-field {
+    background-color: var(--bg-main);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+}
+
+.input-field:focus {
+    border-color: var(--accent);
+}
+
+/* ===== СПИСОК ЧАТОВ ===== */
 .chats-list {
     flex: 1;
     overflow-y: auto;
@@ -366,9 +243,6 @@ body, html {
 .chat-item .avatar {
     width: 44px;
     height: 44px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
 }
 
 .chat-item .user-info {
@@ -386,16 +260,6 @@ body, html {
     color: var(--text-muted);
 }
 
-.chat-item .chat-status.online {
-    color: #4cd964;
-}
-
-.chat-item .chat-time {
-    font-size: 11px;
-    color: var(--text-muted);
-    flex-shrink: 0;
-}
-
 .empty-chats {
     text-align: center;
     padding: 40px 20px;
@@ -408,12 +272,13 @@ body, html {
     margin-bottom: 12px;
 }
 
-/* Правая панель */
+/* ===== ПРАВАЯ ПАНЕЛЬ ===== */
 .main-chat {
     flex: 1;
     display: flex;
     flex-direction: column;
     background: var(--bg-main);
+    min-width: 0;
 }
 
 .chat-header {
@@ -433,6 +298,7 @@ body, html {
     gap: 12px;
     flex: 1;
     cursor: pointer;
+    min-width: 0;
 }
 
 .chat-header-left:hover .user-name {
@@ -475,6 +341,7 @@ body, html {
 .chat-header-actions {
     display: flex;
     gap: 6px;
+    flex-shrink: 0;
 }
 
 .header-btn {
@@ -493,7 +360,7 @@ body, html {
     color: var(--text-main);
 }
 
-/* Сообщения */
+/* ===== СООБЩЕНИЯ ===== */
 .messages-container {
     flex: 1;
     padding: 16px 20px;
@@ -542,7 +409,29 @@ body, html {
     cursor: pointer;
 }
 
-/* Панель ввода */
+.system-info {
+    text-align: center;
+    color: var(--text-muted);
+    margin: auto;
+    font-size: 14px;
+}
+
+.placeholder-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.system-info h3 {
+    margin-bottom: 8px;
+    color: var(--text-main);
+}
+
+.system-info p {
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+/* ===== ПАНЕЛЬ ВВОДА ===== */
 .chat-input-area {
     padding: 12px 16px;
     background: var(--bg-sidebar);
@@ -604,7 +493,20 @@ body, html {
     background: var(--accent-hover);
 }
 
-/* Модальное окно профиля */
+/* ===== МОДАЛЬНОЕ ОКНО ===== */
+#profile-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
 .modal-content {
     background: var(--bg-sidebar);
     border-radius: 16px;
@@ -671,7 +573,26 @@ body, html {
     gap: 8px;
 }
 
-/* Адаптивность */
+/* ===== РОЛИ ===== */
+.role-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    display: inline-block;
+    font-weight: 600;
+}
+
+.role-creator {
+    color: #ffd700;
+    background: rgba(255, 215, 0, 0.15);
+}
+
+.role-admin {
+    color: #00bfff;
+    background: rgba(0, 191, 255, 0.15);
+}
+
+/* ===== АДАПТИВ ===== */
 @media (max-width: 768px) {
     .sidebar {
         width: 100%;
