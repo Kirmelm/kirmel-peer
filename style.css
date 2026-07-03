@@ -26,7 +26,7 @@ body, html {
     overflow: hidden;
 }
 
-/* ===== ЭКРАН ВХОДА ===== */
+/* Экран авторизации */
 #auth-screen {
     display: flex;
     flex-direction: column;
@@ -80,7 +80,7 @@ body, html {
     display: none;
 }
 
-/* ===== ГЛАВНЫЙ ЭКРАН ===== */
+/* Главный экран */
 #app-screen {
     display: none;
     height: 100vh;
@@ -92,7 +92,7 @@ body, html {
     height: 100%;
 }
 
-/* ===== ЛЕВАЯ ПАНЕЛЬ ===== */
+/* Левая панель */
 .sidebar {
     width: 320px;
     background-color: var(--bg-sidebar);
@@ -214,7 +214,7 @@ body, html {
     border-color: var(--accent);
 }
 
-/* ===== СПИСОК ЧАТОВ ===== */
+/* Список чатов */
 .chats-list {
     flex: 1;
     overflow-y: auto;
@@ -272,7 +272,7 @@ body, html {
     margin-bottom: 12px;
 }
 
-/* ===== ПРАВАЯ ПАНЕЛЬ ===== */
+/* Правая панель */
 .main-chat {
     flex: 1;
     display: flex;
@@ -360,7 +360,7 @@ body, html {
     color: var(--text-main);
 }
 
-/* ===== СООБЩЕНИЯ ===== */
+/* Сообщения */
 .messages-container {
     flex: 1;
     padding: 16px 20px;
@@ -431,7 +431,7 @@ body, html {
     line-height: 1.6;
 }
 
-/* ===== ПАНЕЛЬ ВВОДА ===== */
+/* Панель ввода */
 .chat-input-area {
     padding: 12px 16px;
     background: var(--bg-sidebar);
@@ -493,7 +493,7 @@ body, html {
     background: var(--accent-hover);
 }
 
-/* ===== МОДАЛЬНОЕ ОКНО ===== */
+/* Модальное окно */
 #profile-modal {
     display: none;
     position: fixed;
@@ -573,7 +573,7 @@ body, html {
     gap: 8px;
 }
 
-/* ===== РОЛИ ===== */
+/* Роли */
 .role-badge {
     font-size: 10px;
     padding: 2px 8px;
@@ -592,7 +592,7 @@ body, html {
     background: rgba(0, 191, 255, 0.15);
 }
 
-/* ===== АДАПТИВ ===== */
+/* Адаптив */
 @media (max-width: 768px) {
     .sidebar {
         width: 100%;
