@@ -27,6 +27,7 @@ let isCaller = false;
 let isConnected = false;
 let isProcessingCall = false;
 let myChats = {};
+let connectionTimeout = null;
 
 // DOM Элементы
 const authScreen = document.getElementById('auth-screen');
@@ -116,7 +117,7 @@ function generateUserId() {
 }
 
 // ============================================
-// 3. РАБОТА С ЧАТАМИ (СОХРАНЕНИЕ/ЗАГРУЗКА)
+// 3. РАБОТА С ЧАТАМИ
 // ============================================
 
 function saveChat(peerId) {
@@ -210,7 +211,7 @@ function updateLastMessage(peerId, message) {
 }
 
 // ============================================
-// 4. ОТКРЫТИЕ ЧАТА (ОПРЕДЕЛЕНА ДО ИСПОЛЬЗОВАНИЯ)
+// 4. ОТКРЫТИЕ ЧАТА
 // ============================================
 
 function openChat(peerId) {
@@ -223,19 +224,22 @@ function openChat(peerId) {
     }
     dataChannel = null;
     isConnected = false;
+    sharedSecretKey = null;
+    
+    if (connectionTimeout) {
+        clearTimeout(connectionTimeout);
+        connectionTimeout = null;
+    }
     
     remoteId = peerId;
     isCaller = true;
     
-    // Показываем чат
     showChat(peerId);
     
-    // Подсвечиваем в списке
     document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
     const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
     if (item) item.classList.add('active');
     
-    // Начинаем звонок
     startCall(peerId);
 }
 
@@ -400,7 +404,8 @@ async function handleIncomingCall(callerId, data) {
                 console.log('✅ ICE соединение установлено!');
             } else if (state === 'failed') {
                 console.log('❌ ICE failed');
-                restartIce();
+            } else if (state === 'disconnected') {
+                console.log('⚠️ ICE отключен');
             }
         };
         
@@ -437,17 +442,6 @@ async function handleAnswer(data) {
     }
 }
 
-function restartIce() {
-    if (myPeerConnection) {
-        try {
-            myPeerConnection.restartIce();
-            console.log('🔄 ICE перезапущен');
-        } catch (e) {
-            console.error('❌ Ошибка перезапуска ICE:', e);
-        }
-    }
-}
-
 function setupDataChannel() {
     if (!dataChannel) {
         console.error('❌ Нет data channel');
@@ -455,11 +449,16 @@ function setupDataChannel() {
     }
     
     dataChannel.onopen = () => {
-        console.log('✅ Канал данных открыт!');
+        console.log('✅ КАНАЛ ДАННЫХ ОТКРЫТ!');
         isConnected = true;
         saveChat(remoteId);
         renderChatLayout();
         sendHandshake();
+        
+        if (connectionTimeout) {
+            clearTimeout(connectionTimeout);
+            connectionTimeout = null;
+        }
     };
     
     dataChannel.onclose = () => {
@@ -539,6 +538,7 @@ btnConnect.addEventListener('click', async () => {
         return;
     }
     
+    // Очищаем старые вызовы
     await database.ref('calls/' + peerId + '/' + myId).remove();
     await database.ref('calls/' + myId).remove();
     
@@ -576,7 +576,8 @@ async function startCall(peerId) {
                 console.log('✅ ICE соединение установлено!');
             } else if (state === 'failed') {
                 console.log('❌ ICE failed');
-                restartIce();
+            } else if (state === 'disconnected') {
+                console.log('⚠️ ICE отключен');
             }
         };
         
@@ -592,12 +593,19 @@ async function startCall(peerId) {
         
         showChat(peerId);
         
-        setTimeout(() => {
+        // Таймаут на случай если канал не открылся
+        connectionTimeout = setTimeout(() => {
             if (!isConnected) {
-                console.log('⏰ Таймаут соединения');
-                restartIce();
+                console.log('⏰ Таймаут соединения, пробуем перезапустить ICE');
+                if (myPeerConnection) {
+                    try {
+                        myPeerConnection.restartIce();
+                    } catch (e) {
+                        console.error('Ошибка перезапуска ICE:', e);
+                    }
+                }
             }
-        }, 15000);
+        }, 30000); // Увеличил до 30 секунд
         
     } catch (e) {
         console.error('❌ Ошибка звонка:', e);
@@ -616,6 +624,9 @@ function showChat(peerId) {
     inputArea.style.display = 'flex';
     chatName.innerText = 'Подключение...';
     chatAvatar.src = '';
+    
+    // Очищаем сообщения при открытии чата
+    messagesContainer.innerHTML = '';
     
     database.ref('users/' + peerId).once('value', (snapshot) => {
         const user = snapshot.val();
@@ -1050,6 +1061,11 @@ function resetChat() {
     isConnected = false;
     isCaller = false;
     isProcessingCall = false;
+    
+    if (connectionTimeout) {
+        clearTimeout(connectionTimeout);
+        connectionTimeout = null;
+    }
     
     if (myId) {
         database.ref('calls/' + myId).remove();
