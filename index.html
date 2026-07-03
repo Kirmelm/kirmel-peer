@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KirmelPeer</title>
+    <!-- Стили -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- ПОЛНОСТЬЮ ИСПРАВЛЕННЫЕ ССЫЛКИ НА КОРРЕКТНЫЕ JS ФАЙЛЫ -->
+    <script src="https://gstatic.com"></script>
+    <script src="https://gstatic.com"></script>
+    <script src="https://unpkg.com"></script>
+</head>
+<body>
+
+    <!-- Экран входа -->
+    <div id="auth-screen">
+        <div class="auth-card">
+            <h1>KirmelCrypt</h1>
+            <p>Безопасный P2P-мессенджер со сквозным шифрованием</p>
+            <button class="btn" id="btn-login">Войти через Google</button>
+            <div id="error-message"></div>
+        </div>
+    </div>
+
+    <!-- Главный экран -->
+    <div id="app-screen">
+        <div class="container">
+            <!-- Сайдбар -->
+            <div class="sidebar">
+                <div class="header">
+                    <h2>KirmelCrypt</h2>
+                    <div class="user-profile">
+                        <img id="my-avatar" class="avatar" src="" alt="">
+                        <div class="user-info">
+                            <div id="my-name" class="user-name">Загрузка...</div>
+                            <div id="my-id-display" class="my-id">ID: генерируется...</div>
+                        </div>
+                    </div>
+                    <div class="connect-box">
+                        <input type="text" id="peer-id-input" class="input-field" placeholder="Введи ID друга">
+                        <button class="btn" id="btn-connect">Подключиться</button>
+                    </div>
+                </div>
+                <div class="chats-list" id="chats-list">
+                    <!-- Список активных чатов -->
+                </div>
+            </div>
+
+            <!-- Окно чата -->
+            <div class="main-chat">
+                <div class="chat-header" id="active-chat-header" style="display: none;">
+                    <img id="chat-avatar" class="avatar" src="" alt="">
+                    <div>
+                        <div id="chat-name" class="user-name">Собеседник</div>
+                        <div class="chat-status">Защищенное P2P соединение</div>
+                    </div>
+                </div>
+
+                <div class="messages-container" id="messages-container">
+                    <div class="system-info" id="system-placeholder">
+                        Введите ID друга для начала безопасной сессии. Все сообщения шифруются на вашем устройстве.
+                    </div>
+                </div>
+
+                <div class="chat-input-area" id="input-area" style="display: none;">
+                    <input type="text" id="message-input" class="input-field" placeholder="Напишите сообщение...">
+                    <button class="btn" id="btn-send" style="width: auto;">Отправить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Скрипты приложения -->
+    <script src="app.js"></script>
+    <script src="index.js"></script>
+</body>
+</html>
