@@ -20,6 +20,9 @@ let activeConnection = null;
 let activeChat = null;
 let myKeyPair = null;
 let sharedSecretKey = null;
+let isReconnecting = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 3;
 
 // DOM Элементы
 const authScreen = document.getElementById('auth-screen');
@@ -76,7 +79,7 @@ function initUserMetadata() {
 async function generateKeyPair() {
     return await window.crypto.subtle.generateKey(
         { name: "ECDH", namedCurve: "P-256" },
-        false, 
+        false,
         ["deriveKey", "deriveBits"]
     );
 }
@@ -141,19 +144,19 @@ async function decryptMessage(encryptedObj, key) {
     }
 }
 
-// --- P2P СОЕДИНЕНИЕ (ИСПРАВЛЕНО) ---
+// --- P2P СОЕДИНЕНИЕ (ПОЛНОСТЬЮ ПЕРЕПИСАНО) ---
 
 async function initPeer() {
-    myKeyPair = await generateKeyPair();
-    
-    // ИСПРАВЛЕНО: Используем другой сервер PeerJS
     try {
+        myKeyPair = await generateKeyPair();
+        
+        // Создаем новый Peer
         peer = new Peer(undefined, {
             host: '0.peerjs.com',
             port: 443,
             path: '/',
             secure: true,
-            debug: 2,
+            debug: 0, // Отключаем отладку чтобы не спамило
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
@@ -161,53 +164,92 @@ async function initPeer() {
                 ]
             }
         });
-    } catch (e) {
-        console.error('Ошибка создания Peer:', e);
-        alert('Ошибка подключения к серверу. Перезагрузите страницу.');
-        return;
-    }
 
-    peer.on('open', (id) => {
-        console.log('✅ PeerJS подключен! ID:', id);
-        myIdDisplay.innerText = `Ваш ID: ${id} (клик для копирования)`;
-        myIdDisplay.onclick = () => {
-            navigator.clipboard.writeText(id);
-            alert('ID скопирован!');
-        };
-    });
+        peer.on('open', (id) => {
+            console.log('✅ PeerJS подключен! ID:', id);
+            isReconnecting = false;
+            reconnectAttempts = 0;
+            myIdDisplay.innerText = `Ваш ID: ${id} (клик для копирования)`;
+            myIdDisplay.onclick = () => {
+                navigator.clipboard.writeText(id);
+                alert('ID скопирован!');
+            };
+        });
 
-    peer.on('connection', (conn) => {
-        console.log('📥 Входящее соединение от:', conn.peer);
-        if (activeConnection) {
-            conn.close(); 
-            return;
-        }
-        setupConnection(conn);
-    });
-
-    peer.on('error', (err) => {
-        console.error('❌ PeerJS ошибка:', err);
-        
-        if (err.type === 'unavailable-id') {
-            alert('Ошибка: ID уже используется. Перезагрузите страницу.');
-        } else if (err.type === 'peer-unavailable') {
-            alert('❌ Собеседник не найден. Проверьте ID.');
-        } else if (err.type === 'network') {
-            alert('⚠️ Проблема с сетью. Проверьте интернет-соединение.');
-        } else {
-            // Не показываем ошибку для некоторых типов
-            if (err.type !== 'browser-incompatible') {
-                console.log('PeerJS ошибка (не критичная):', err.message);
+        peer.on('connection', (conn) => {
+            console.log('📥 Входящее соединение от:', conn.peer);
+            if (activeConnection) {
+                conn.close();
+                return;
             }
-        }
-    });
+            setupConnection(conn);
+        });
 
-    peer.on('disconnected', () => {
-        console.log('⚠️ PeerJS отключен, переподключаемся...');
-        setTimeout(() => {
-            peer.reconnect();
-        }, 3000);
-    });
+        peer.on('error', (err) => {
+            console.log('PeerJS ошибка:', err.type, err.message);
+            
+            if (err.type === 'unavailable-id') {
+                alert('Ошибка: ID уже используется. Перезагрузите страницу.');
+            } else if (err.type === 'peer-unavailable') {
+                alert('❌ Собеседник не найден. Проверьте ID.');
+            } else if (err.type === 'network') {
+                // Пробуем переподключиться
+                if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    isReconnecting = true;
+                    reconnectAttempts++;
+                    console.log(`🔄 Попытка переподключения ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
+                    setTimeout(() => {
+                        if (peer && !peer.destroyed) {
+                            peer.reconnect();
+                        } else {
+                            // Если peer уничтожен, создаем новый
+                            destroyPeer();
+                            initPeer();
+                        }
+                    }, 3000);
+                } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                    alert('⚠️ Не удалось подключиться к серверу. Перезагрузите страницу.');
+                }
+            }
+        });
+
+        peer.on('disconnected', () => {
+            console.log('⚠️ PeerJS отключен');
+            if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                isReconnecting = true;
+                reconnectAttempts++;
+                console.log(`🔄 Попытка переподключения ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
+                setTimeout(() => {
+                    if (peer && !peer.destroyed) {
+                        peer.reconnect();
+                    } else {
+                        destroyPeer();
+                        initPeer();
+                    }
+                }, 3000);
+            }
+        });
+
+        peer.on('close', () => {
+            console.log('🔌 PeerJS закрыт');
+            destroyPeer();
+        });
+
+    } catch (error) {
+        console.error('Ошибка инициализации Peer:', error);
+        alert('Ошибка подключения к серверу. Перезагрузите страницу.');
+    }
+}
+
+function destroyPeer() {
+    if (peer) {
+        try {
+            peer.destroy();
+        } catch (e) {
+            console.log('Ошибка при уничтожении peer:', e);
+        }
+        peer = null;
+    }
 }
 
 btnConnect.addEventListener('click', () => {
@@ -216,8 +258,12 @@ btnConnect.addEventListener('click', () => {
         alert('Введите ID собеседника');
         return;
     }
-    if (peerId === peer.id) {
+    if (peerId === peer?.id) {
         alert('Нельзя подключиться к самому себе');
+        return;
+    }
+    if (!peer || peer.destroyed) {
+        alert('Соединение не установлено. Перезагрузите страницу.');
         return;
     }
 
@@ -233,34 +279,41 @@ async function setupConnection(conn) {
 
     conn.on('open', async () => {
         console.log('✅ Соединение открыто с:', conn.peer);
-        const rawPubKey = await exportPublicKey(myKeyPair.publicKey);
-        
-        conn.send({
-            type: 'HANDSHAKE',
-            name: currentUser.displayName,
-            avatar: currentUser.photoURL,
-            publicKey: rawPubKey
-        });
+        try {
+            const rawPubKey = await exportPublicKey(myKeyPair.publicKey);
+            conn.send({
+                type: 'HANDSHAKE',
+                name: currentUser.displayName,
+                avatar: currentUser.photoURL,
+                publicKey: rawPubKey
+            });
+        } catch (e) {
+            console.error('Ошибка при отправке handshake:', e);
+        }
     });
 
     conn.on('data', async (data) => {
-        console.log('📩 Получены данные от:', conn.peer);
-        
-        if (data.type === 'HANDSHAKE') {
-            activeChat = {
-                id: conn.peer,
-                name: data.name,
-                avatar: data.avatar
-            };
+        try {
+            if (data.type === 'HANDSHAKE') {
+                activeChat = {
+                    id: conn.peer,
+                    name: data.name,
+                    avatar: data.avatar
+                };
 
-            const peerPublicKey = await importPublicKey(data.publicKey);
-            sharedSecretKey = await deriveSharedKey(myKeyPair.privateKey, peerPublicKey);
-
-            renderChatLayout();
-        } 
-        else if (data.type === 'MESSAGE') {
-            const decryptedText = await decryptMessage(data.encrypted, sharedSecretKey);
-            appendMessage(decryptedText, 'in');
+                const peerPublicKey = await importPublicKey(data.publicKey);
+                sharedSecretKey = await deriveSharedKey(myKeyPair.privateKey, peerPublicKey);
+                renderChatLayout();
+            } else if (data.type === 'MESSAGE') {
+                if (!sharedSecretKey) {
+                    console.warn('Ключ шифрования не установлен');
+                    return;
+                }
+                const decryptedText = await decryptMessage(data.encrypted, sharedSecretKey);
+                appendMessage(decryptedText, 'in');
+            }
+        } catch (e) {
+            console.error('Ошибка обработки данных:', e);
         }
     });
 
@@ -272,7 +325,9 @@ async function setupConnection(conn) {
 
     conn.on('error', (err) => {
         console.error('❌ Ошибка соединения:', err);
-        alert('Ошибка соединения: ' + err.message);
+        if (err.type !== 'peer-unavailable') {
+            alert('Ошибка соединения: ' + err.message);
+        }
         resetChat();
     });
 }
@@ -283,7 +338,7 @@ function renderChatLayout() {
     systemPlaceholder.style.display = 'none';
     activeChatHeader.style.display = 'flex';
     inputArea.style.display = 'flex';
-    
+
     chatAvatar.src = activeChat.avatar || '';
     chatName.innerText = activeChat.name;
 
@@ -313,15 +368,18 @@ async function handleSendMessage() {
         return;
     }
 
-    const encryptedData = await encryptMessage(text, sharedSecretKey);
-
-    activeConnection.send({
-        type: 'MESSAGE',
-        encrypted: encryptedData
-    });
-
-    appendMessage(text, 'out');
-    messageInput.value = '';
+    try {
+        const encryptedData = await encryptMessage(text, sharedSecretKey);
+        activeConnection.send({
+            type: 'MESSAGE',
+            encrypted: encryptedData
+        });
+        appendMessage(text, 'out');
+        messageInput.value = '';
+    } catch (e) {
+        console.error('Ошибка отправки:', e);
+        alert('Ошибка отправки сообщения');
+    }
 }
 
 btnSend.addEventListener('click', handleSendMessage);
