@@ -12,17 +12,18 @@ const firebaseConfig = {
 // Инициализация Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
+const database = firebase.database();
 
 // Глобальные переменные
 let currentUser = null;
-let peer = null;
-let activeConnection = null;
+let myPeerConnection = null;
+let dataChannel = null;
 let activeChat = null;
 let myKeyPair = null;
 let sharedSecretKey = null;
-let isReconnecting = false;
-let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 3;
+let myId = null;
+let remoteId = null;
+let isCaller = false;
 
 // DOM Элементы
 const authScreen = document.getElementById('auth-screen');
@@ -62,7 +63,7 @@ auth.onAuthStateChanged((user) => {
         authScreen.style.display = 'none';
         appScreen.style.display = 'block';
         initUserMetadata();
-        initPeer();
+        generateUserId();
     } else {
         authScreen.style.display = 'flex';
         appScreen.style.display = 'none';
@@ -72,6 +73,33 @@ auth.onAuthStateChanged((user) => {
 function initUserMetadata() {
     myAvatar.src = currentUser.photoURL || '';
     myName.innerText = currentUser.displayName || 'Аноним';
+}
+
+// --- ГЕНЕРАЦИЯ ID ---
+
+function generateUserId() {
+    // Генерируем уникальный ID на основе UID пользователя
+    myId = currentUser.uid.substring(0, 12);
+    myIdDisplay.innerText = `Ваш ID: ${myId} (клик для копирования)`;
+    myIdDisplay.onclick = () => {
+        navigator.clipboard.writeText(myId);
+        alert('ID скопирован!');
+    };
+    
+    // Сохраняем пользователя в Firebase
+    database.ref('users/' + myId).set({
+        name: currentUser.displayName,
+        avatar: currentUser.photoURL,
+        online: true
+    });
+    
+    // Очищаем при выходе
+    window.addEventListener('beforeunload', () => {
+        database.ref('users/' + myId).update({ online: false });
+    });
+    
+    // Слушаем входящие вызовы
+    listenForCalls();
 }
 
 // --- КРИПТОГРАФИЯ ---
@@ -144,191 +172,201 @@ async function decryptMessage(encryptedObj, key) {
     }
 }
 
-// --- P2P СОЕДИНЕНИЕ (ПОЛНОСТЬЮ ПЕРЕПИСАНО) ---
+// --- WEBRTC (без сервера!) ---
 
-async function initPeer() {
+// Конфигурация для WebRTC
+const rtcConfig = {
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+};
+
+async function listenForCalls() {
+    // Слушаем входящие сигналы
+    database.ref('calls/' + myId).on('child_added', async (snapshot) => {
+        const data = snapshot.val();
+        const callerId = snapshot.key;
+        
+        if (!data || !data.type) return;
+        
+        console.log('📞 Входящий вызов от:', callerId);
+        
+        if (data.type === 'offer') {
+            // Отвечаем на звонок
+            isCaller = false;
+            remoteId = callerId;
+            await handleIncomingCall(callerId, data);
+        } else if (data.type === 'answer' && isCaller) {
+            // Получили ответ на наш звонок
+            await handleAnswer(data);
+        } else if (data.type === 'candidate') {
+            // Получили ICE кандидат
+            if (myPeerConnection) {
+                try {
+                    const candidate = new RTCIceCandidate(data.candidate);
+                    await myPeerConnection.addIceCandidate(candidate);
+                } catch (e) {
+                    console.log('Ошибка добавления кандидата:', e);
+                }
+            }
+        }
+    });
+}
+
+async function handleIncomingCall(callerId, data) {
     try {
         myKeyPair = await generateKeyPair();
         
-        // Создаем новый Peer
-        peer = new Peer(undefined, {
-            host: '0.peerjs.com',
-            port: 443,
-            path: '/',
-            secure: true,
-            debug: 0, // Отключаем отладку чтобы не спамило
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
+        // Создаем PeerConnection
+        myPeerConnection = new RTCPeerConnection(rtcConfig);
+        dataChannel = myPeerConnection.createDataChannel('chat');
+        setupDataChannel();
+        
+        // Создаем ответ (answer)
+        const answer = await myPeerConnection.createAnswer();
+        await myPeerConnection.setLocalDescription(answer);
+        
+        // Отправляем ответ
+        await database.ref('calls/' + callerId + '/' + myId).set({
+            type: 'answer',
+            sdp: answer
+        });
+        
+        // Слушаем ICE кандидаты
+        myPeerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                database.ref('calls/' + callerId + '/' + myId).set({
+                    type: 'candidate',
+                    candidate: event.candidate
+                });
             }
-        });
-
-        peer.on('open', (id) => {
-            console.log('✅ PeerJS подключен! ID:', id);
-            isReconnecting = false;
-            reconnectAttempts = 0;
-            myIdDisplay.innerText = `Ваш ID: ${id} (клик для копирования)`;
-            myIdDisplay.onclick = () => {
-                navigator.clipboard.writeText(id);
-                alert('ID скопирован!');
-            };
-        });
-
-        peer.on('connection', (conn) => {
-            console.log('📥 Входящее соединение от:', conn.peer);
-            if (activeConnection) {
-                conn.close();
-                return;
-            }
-            setupConnection(conn);
-        });
-
-        peer.on('error', (err) => {
-            console.log('PeerJS ошибка:', err.type, err.message);
-            
-            if (err.type === 'unavailable-id') {
-                alert('Ошибка: ID уже используется. Перезагрузите страницу.');
-            } else if (err.type === 'peer-unavailable') {
-                alert('❌ Собеседник не найден. Проверьте ID.');
-            } else if (err.type === 'network') {
-                // Пробуем переподключиться
-                if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                    isReconnecting = true;
-                    reconnectAttempts++;
-                    console.log(`🔄 Попытка переподключения ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
-                    setTimeout(() => {
-                        if (peer && !peer.destroyed) {
-                            peer.reconnect();
-                        } else {
-                            // Если peer уничтожен, создаем новый
-                            destroyPeer();
-                            initPeer();
-                        }
-                    }, 3000);
-                } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-                    alert('⚠️ Не удалось подключиться к серверу. Перезагрузите страницу.');
-                }
-            }
-        });
-
-        peer.on('disconnected', () => {
-            console.log('⚠️ PeerJS отключен');
-            if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                isReconnecting = true;
-                reconnectAttempts++;
-                console.log(`🔄 Попытка переподключения ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
-                setTimeout(() => {
-                    if (peer && !peer.destroyed) {
-                        peer.reconnect();
-                    } else {
-                        destroyPeer();
-                        initPeer();
-                    }
-                }, 3000);
-            }
-        });
-
-        peer.on('close', () => {
-            console.log('🔌 PeerJS закрыт');
-            destroyPeer();
-        });
-
-    } catch (error) {
-        console.error('Ошибка инициализации Peer:', error);
-        alert('Ошибка подключения к серверу. Перезагрузите страницу.');
+        };
+        
+        // Устанавливаем удаленное описание
+        await myPeerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        
+        remoteId = callerId;
+        showChat(callerId);
+        
+    } catch (e) {
+        console.error('Ошибка ответа на звонок:', e);
     }
 }
 
-function destroyPeer() {
-    if (peer) {
+async function handleAnswer(data) {
+    try {
+        await myPeerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    } catch (e) {
+        console.error('Ошибка установки ответа:', e);
+    }
+}
+
+function setupDataChannel() {
+    dataChannel.onopen = () => {
+        console.log('✅ Канал данных открыт!');
+        renderChatLayout();
+    };
+    
+    dataChannel.onclose = () => {
+        console.log('🔌 Канал закрыт');
+        resetChat();
+    };
+    
+    dataChannel.onmessage = async (event) => {
         try {
-            peer.destroy();
+            const data = JSON.parse(event.data);
+            if (data.type === 'HANDSHAKE') {
+                // Получаем публичный ключ собеседника
+                const peerPublicKey = await importPublicKey(new Uint8Array(data.publicKey));
+                sharedSecretKey = await deriveSharedKey(myKeyPair.privateKey, peerPublicKey);
+                console.log('🔑 Ключ шифрования установлен!');
+            } else if (data.type === 'MESSAGE') {
+                const decryptedText = await decryptMessage(data.encrypted, sharedSecretKey);
+                appendMessage(decryptedText, 'in');
+            }
         } catch (e) {
-            console.log('Ошибка при уничтожении peer:', e);
+            console.error('Ошибка обработки сообщения:', e);
         }
-        peer = null;
-    }
+    };
 }
 
-btnConnect.addEventListener('click', () => {
+// --- ВЫЗОВ СОБЕСЕДНИКА ---
+
+btnConnect.addEventListener('click', async () => {
     const peerId = peerIdInput.value.trim();
     if (!peerId) {
         alert('Введите ID собеседника');
         return;
     }
-    if (peerId === peer?.id) {
+    if (peerId === myId) {
         alert('Нельзя подключиться к самому себе');
         return;
     }
-    if (!peer || peer.destroyed) {
-        alert('Соединение не установлено. Перезагрузите страницу.');
+    
+    // Проверяем существует ли пользователь
+    const userSnapshot = await database.ref('users/' + peerId).once('value');
+    if (!userSnapshot.exists()) {
+        alert('❌ Пользователь не найден');
         return;
     }
-
-    console.log('🔗 Подключаемся к:', peerId);
-    const conn = peer.connect(peerId, {
-        reliable: true
-    });
-    setupConnection(conn);
+    
+    remoteId = peerId;
+    isCaller = true;
+    await startCall(peerId);
 });
 
-async function setupConnection(conn) {
-    activeConnection = conn;
-
-    conn.on('open', async () => {
-        console.log('✅ Соединение открыто с:', conn.peer);
-        try {
-            const rawPubKey = await exportPublicKey(myKeyPair.publicKey);
-            conn.send({
-                type: 'HANDSHAKE',
-                name: currentUser.displayName,
-                avatar: currentUser.photoURL,
-                publicKey: rawPubKey
-            });
-        } catch (e) {
-            console.error('Ошибка при отправке handshake:', e);
-        }
-    });
-
-    conn.on('data', async (data) => {
-        try {
-            if (data.type === 'HANDSHAKE') {
-                activeChat = {
-                    id: conn.peer,
-                    name: data.name,
-                    avatar: data.avatar
-                };
-
-                const peerPublicKey = await importPublicKey(data.publicKey);
-                sharedSecretKey = await deriveSharedKey(myKeyPair.privateKey, peerPublicKey);
-                renderChatLayout();
-            } else if (data.type === 'MESSAGE') {
-                if (!sharedSecretKey) {
-                    console.warn('Ключ шифрования не установлен');
-                    return;
-                }
-                const decryptedText = await decryptMessage(data.encrypted, sharedSecretKey);
-                appendMessage(decryptedText, 'in');
+async function startCall(peerId) {
+    try {
+        myKeyPair = await generateKeyPair();
+        
+        // Создаем PeerConnection
+        myPeerConnection = new RTCPeerConnection(rtcConfig);
+        dataChannel = myPeerConnection.createDataChannel('chat');
+        setupDataChannel();
+        
+        // Создаем offer
+        const offer = await myPeerConnection.createOffer();
+        await myPeerConnection.setLocalDescription(offer);
+        
+        // Отправляем offer собеседнику
+        await database.ref('calls/' + peerId + '/' + myId).set({
+            type: 'offer',
+            sdp: offer
+        });
+        
+        // Слушаем ICE кандидаты
+        myPeerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                database.ref('calls/' + peerId + '/' + myId).set({
+                    type: 'candidate',
+                    candidate: event.candidate
+                });
             }
-        } catch (e) {
-            console.error('Ошибка обработки данных:', e);
-        }
-    });
+        };
+        
+        showChat(peerId);
+        
+    } catch (e) {
+        console.error('Ошибка звонка:', e);
+        alert('Ошибка подключения: ' + e.message);
+    }
+}
 
-    conn.on('close', () => {
-        console.log('🔌 Соединение закрыто');
-        alert("Соединение закрыто");
-        resetChat();
-    });
-
-    conn.on('error', (err) => {
-        console.error('❌ Ошибка соединения:', err);
-        if (err.type !== 'peer-unavailable') {
-            alert('Ошибка соединения: ' + err.message);
+function showChat(peerId) {
+    // Показываем что подключаемся
+    systemPlaceholder.style.display = 'none';
+    activeChatHeader.style.display = 'flex';
+    chatName.innerText = 'Подключение...';
+    chatAvatar.src = '';
+    
+    // Получаем данные собеседника
+    database.ref('users/' + peerId).on('value', (snapshot) => {
+        const user = snapshot.val();
+        if (user) {
+            chatName.innerText = user.name || 'Собеседник';
+            chatAvatar.src = user.avatar || '';
         }
-        resetChat();
     });
 }
 
@@ -338,19 +376,45 @@ function renderChatLayout() {
     systemPlaceholder.style.display = 'none';
     activeChatHeader.style.display = 'flex';
     inputArea.style.display = 'flex';
-
-    chatAvatar.src = activeChat.avatar || '';
-    chatName.innerText = activeChat.name;
-
+    
+    // Получаем данные собеседника
+    database.ref('users/' + remoteId).once('value', (snapshot) => {
+        const user = snapshot.val();
+        if (user) {
+            chatName.innerText = user.name || 'Собеседник';
+            chatAvatar.src = user.avatar || '';
+        }
+    });
+    
     chatsList.innerHTML = `
         <div class="chat-item active">
-            <img class="avatar" src="${activeChat.avatar || ''}">
+            <img class="avatar" src="${chatAvatar.src || ''}">
             <div class="user-info">
-                <div class="user-name">${activeChat.name}</div>
-                <div class="chat-status">в сети</div>
+                <div class="user-name">${chatName.innerText}</div>
+                <div class="chat-status">🔒 Защищено</div>
             </div>
         </div>
     `;
+    
+    // Отправляем handshake с публичным ключом
+    sendHandshake();
+}
+
+async function sendHandshake() {
+    if (!dataChannel || dataChannel.readyState !== 'open') {
+        setTimeout(sendHandshake, 1000);
+        return;
+    }
+    
+    try {
+        const rawPubKey = await exportPublicKey(myKeyPair.publicKey);
+        dataChannel.send(JSON.stringify({
+            type: 'HANDSHAKE',
+            publicKey: Array.from(new Uint8Array(rawPubKey))
+        }));
+    } catch (e) {
+        console.error('Ошибка отправки handshake:', e);
+    }
 }
 
 async function handleSendMessage() {
@@ -359,8 +423,8 @@ async function handleSendMessage() {
         alert('Введите сообщение');
         return;
     }
-    if (!activeConnection) {
-        alert('Нет активного соединения');
+    if (!dataChannel || dataChannel.readyState !== 'open') {
+        alert('Соединение не установлено');
         return;
     }
     if (!sharedSecretKey) {
@@ -370,10 +434,10 @@ async function handleSendMessage() {
 
     try {
         const encryptedData = await encryptMessage(text, sharedSecretKey);
-        activeConnection.send({
+        dataChannel.send(JSON.stringify({
             type: 'MESSAGE',
             encrypted: encryptedData
-        });
+        }));
         appendMessage(text, 'out');
         messageInput.value = '';
     } catch (e) {
@@ -403,13 +467,22 @@ function appendMessage(text, direction) {
 }
 
 function resetChat() {
-    activeConnection = null;
+    if (myPeerConnection) {
+        myPeerConnection.close();
+        myPeerConnection = null;
+    }
+    dataChannel = null;
     activeChat = null;
     sharedSecretKey = null;
     chatsList.innerHTML = '';
     activeChatHeader.style.display = 'none';
     inputArea.style.display = 'none';
     messagesContainer.innerHTML = `<div class="system-info" id="system-placeholder">Соединение разорвано</div>`;
+    
+    // Очищаем вызовы
+    if (myId) {
+        database.ref('calls/' + myId).remove();
+    }
 }
 
 function escapeHTML(str) {
@@ -418,4 +491,4 @@ function escapeHTML(str) {
     return div.innerHTML;
 }
 
-console.log('✅ App.js загружен!');
+console.log('✅ App.js загружен! (WebRTC без сервера)');
