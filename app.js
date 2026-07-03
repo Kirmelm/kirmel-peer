@@ -24,6 +24,8 @@ let sharedSecretKey = null;
 let myId = null;
 let remoteId = null;
 let isCaller = false;
+let isConnected = false;
+let reconnectTimer = null;
 
 // DOM Элементы
 const authScreen = document.getElementById('auth-screen');
@@ -78,7 +80,6 @@ function initUserMetadata() {
 // --- ГЕНЕРАЦИЯ ID ---
 
 function generateUserId() {
-    // Генерируем уникальный ID на основе UID пользователя
     myId = currentUser.uid.substring(0, 12);
     myIdDisplay.innerText = `Ваш ID: ${myId} (клик для копирования)`;
     myIdDisplay.onclick = () => {
@@ -86,19 +87,21 @@ function generateUserId() {
         alert('ID скопирован!');
     };
     
-    // Сохраняем пользователя в Firebase
+    // Сохраняем пользователя
     database.ref('users/' + myId).set({
         name: currentUser.displayName,
         avatar: currentUser.photoURL,
-        online: true
+        online: true,
+        lastSeen: Date.now()
     });
     
-    // Очищаем при выходе
     window.addEventListener('beforeunload', () => {
         database.ref('users/' + myId).update({ online: false });
+        if (myPeerConnection) {
+            myPeerConnection.close();
+        }
     });
     
-    // Слушаем входящие вызовы
     listenForCalls();
 }
 
@@ -172,44 +175,46 @@ async function decryptMessage(encryptedObj, key) {
     }
 }
 
-// --- WEBRTC (без сервера!) ---
+// --- WEBRTC ---
 
-// Конфигурация для WebRTC
 const rtcConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-    ]
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' }
+    ],
+    iceCandidatePoolSize: 10
 };
 
 async function listenForCalls() {
-    // Слушаем входящие сигналы
     database.ref('calls/' + myId).on('child_added', async (snapshot) => {
         const data = snapshot.val();
         const callerId = snapshot.key;
         
-        if (!data || !data.type) return;
+        if (!data || !data.type || callerId === myId) return;
         
         console.log('📞 Входящий вызов от:', callerId);
         
-        if (data.type === 'offer') {
-            // Отвечаем на звонок
-            isCaller = false;
-            remoteId = callerId;
-            await handleIncomingCall(callerId, data);
-        } else if (data.type === 'answer' && isCaller) {
-            // Получили ответ на наш звонок
-            await handleAnswer(data);
-        } else if (data.type === 'candidate') {
-            // Получили ICE кандидат
-            if (myPeerConnection) {
-                try {
-                    const candidate = new RTCIceCandidate(data.candidate);
-                    await myPeerConnection.addIceCandidate(candidate);
-                } catch (e) {
-                    console.log('Ошибка добавления кандидата:', e);
+        try {
+            if (data.type === 'offer') {
+                isCaller = false;
+                remoteId = callerId;
+                await handleIncomingCall(callerId, data);
+            } else if (data.type === 'answer' && isCaller) {
+                await handleAnswer(data);
+            } else if (data.type === 'candidate') {
+                if (myPeerConnection) {
+                    try {
+                        const candidate = new RTCIceCandidate(data.candidate);
+                        await myPeerConnection.addIceCandidate(candidate);
+                        console.log('✅ ICE кандидат добавлен');
+                    } catch (e) {
+                        console.log('Ошибка добавления кандидата:', e);
+                    }
                 }
             }
+        } catch (e) {
+            console.error('Ошибка обработки вызова:', e);
         }
     });
 }
@@ -218,24 +223,19 @@ async function handleIncomingCall(callerId, data) {
     try {
         myKeyPair = await generateKeyPair();
         
-        // Создаем PeerConnection
         myPeerConnection = new RTCPeerConnection(rtcConfig);
-        dataChannel = myPeerConnection.createDataChannel('chat');
-        setupDataChannel();
         
-        // Создаем ответ (answer)
-        const answer = await myPeerConnection.createAnswer();
-        await myPeerConnection.setLocalDescription(answer);
+        // Создаем data channel (получатель)
+        myPeerConnection.ondatachannel = (event) => {
+            dataChannel = event.channel;
+            setupDataChannel();
+            console.log('📡 Data channel получен');
+        };
         
-        // Отправляем ответ
-        await database.ref('calls/' + callerId + '/' + myId).set({
-            type: 'answer',
-            sdp: answer
-        });
-        
-        // Слушаем ICE кандидаты
+        // Собираем ICE кандидаты
         myPeerConnection.onicecandidate = (event) => {
             if (event.candidate) {
+                console.log('📤 Отправка ICE кандидата');
                 database.ref('calls/' + callerId + '/' + myId).set({
                     type: 'candidate',
                     candidate: event.candidate
@@ -246,42 +246,79 @@ async function handleIncomingCall(callerId, data) {
         // Устанавливаем удаленное описание
         await myPeerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
         
+        // Создаем ответ
+        const answer = await myPeerConnection.createAnswer();
+        await myPeerConnection.setLocalDescription(answer);
+        
+        // Отправляем ответ
+        await database.ref('calls/' + callerId + '/' + myId).set({
+            type: 'answer',
+            sdp: answer
+        });
+        
         remoteId = callerId;
         showChat(callerId);
+        console.log('✅ Ответ отправлен');
         
     } catch (e) {
         console.error('Ошибка ответа на звонок:', e);
+        alert('Ошибка соединения: ' + e.message);
     }
 }
 
 async function handleAnswer(data) {
     try {
         await myPeerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        console.log('✅ Установлен remote description');
     } catch (e) {
         console.error('Ошибка установки ответа:', e);
     }
 }
 
 function setupDataChannel() {
+    if (!dataChannel) {
+        console.error('❌ Нет data channel');
+        return;
+    }
+    
     dataChannel.onopen = () => {
         console.log('✅ Канал данных открыт!');
+        isConnected = true;
         renderChatLayout();
+        sendHandshake();
     };
     
     dataChannel.onclose = () => {
         console.log('🔌 Канал закрыт');
+        isConnected = false;
         resetChat();
+    };
+    
+    dataChannel.onerror = (error) => {
+        console.error('❌ Ошибка канала:', error);
     };
     
     dataChannel.onmessage = async (event) => {
         try {
             const data = JSON.parse(event.data);
+            console.log('📩 Получено сообщение:', data.type);
+            
             if (data.type === 'HANDSHAKE') {
-                // Получаем публичный ключ собеседника
                 const peerPublicKey = await importPublicKey(new Uint8Array(data.publicKey));
                 sharedSecretKey = await deriveSharedKey(myKeyPair.privateKey, peerPublicKey);
                 console.log('🔑 Ключ шифрования установлен!');
+                
+                // Отправляем ответный handshake
+                const rawPubKey = await exportPublicKey(myKeyPair.publicKey);
+                dataChannel.send(JSON.stringify({
+                    type: 'HANDSHAKE',
+                    publicKey: Array.from(new Uint8Array(rawPubKey))
+                }));
             } else if (data.type === 'MESSAGE') {
+                if (!sharedSecretKey) {
+                    console.warn('❌ Нет ключа шифрования');
+                    return;
+                }
                 const decryptedText = await decryptMessage(data.encrypted, sharedSecretKey);
                 appendMessage(decryptedText, 'in');
             }
@@ -303,11 +340,20 @@ btnConnect.addEventListener('click', async () => {
         alert('Нельзя подключиться к самому себе');
         return;
     }
+    if (isConnected) {
+        alert('Уже есть активное соединение');
+        return;
+    }
     
     // Проверяем существует ли пользователь
-    const userSnapshot = await database.ref('users/' + peerId).once('value');
-    if (!userSnapshot.exists()) {
-        alert('❌ Пользователь не найден');
+    try {
+        const userSnapshot = await database.ref('users/' + peerId).once('value');
+        if (!userSnapshot.exists()) {
+            alert('❌ Пользователь не найден');
+            return;
+        }
+    } catch (e) {
+        alert('Ошибка проверки пользователя');
         return;
     }
     
@@ -318,26 +364,19 @@ btnConnect.addEventListener('click', async () => {
 
 async function startCall(peerId) {
     try {
+        console.log('📞 Звонок к:', peerId);
         myKeyPair = await generateKeyPair();
         
-        // Создаем PeerConnection
         myPeerConnection = new RTCPeerConnection(rtcConfig);
+        
+        // Создаем data channel (звонящий)
         dataChannel = myPeerConnection.createDataChannel('chat');
         setupDataChannel();
         
-        // Создаем offer
-        const offer = await myPeerConnection.createOffer();
-        await myPeerConnection.setLocalDescription(offer);
-        
-        // Отправляем offer собеседнику
-        await database.ref('calls/' + peerId + '/' + myId).set({
-            type: 'offer',
-            sdp: offer
-        });
-        
-        // Слушаем ICE кандидаты
+        // Собираем ICE кандидаты
         myPeerConnection.onicecandidate = (event) => {
             if (event.candidate) {
+                console.log('📤 Отправка ICE кандидата');
                 database.ref('calls/' + peerId + '/' + myId).set({
                     type: 'candidate',
                     candidate: event.candidate
@@ -345,23 +384,33 @@ async function startCall(peerId) {
             }
         };
         
+        // Создаем offer
+        const offer = await myPeerConnection.createOffer();
+        await myPeerConnection.setLocalDescription(offer);
+        
+        // Отправляем offer
+        await database.ref('calls/' + peerId + '/' + myId).set({
+            type: 'offer',
+            sdp: offer
+        });
+        
+        console.log('✅ Offer отправлен');
         showChat(peerId);
         
     } catch (e) {
         console.error('Ошибка звонка:', e);
         alert('Ошибка подключения: ' + e.message);
+        resetChat();
     }
 }
 
 function showChat(peerId) {
-    // Показываем что подключаемся
     systemPlaceholder.style.display = 'none';
     activeChatHeader.style.display = 'flex';
     chatName.innerText = 'Подключение...';
     chatAvatar.src = '';
     
-    // Получаем данные собеседника
-    database.ref('users/' + peerId).on('value', (snapshot) => {
+    database.ref('users/' + peerId).once('value', (snapshot) => {
         const user = snapshot.val();
         if (user) {
             chatName.innerText = user.name || 'Собеседник';
@@ -377,7 +426,6 @@ function renderChatLayout() {
     activeChatHeader.style.display = 'flex';
     inputArea.style.display = 'flex';
     
-    // Получаем данные собеседника
     database.ref('users/' + remoteId).once('value', (snapshot) => {
         const user = snapshot.val();
         if (user) {
@@ -395,9 +443,6 @@ function renderChatLayout() {
             </div>
         </div>
     `;
-    
-    // Отправляем handshake с публичным ключом
-    sendHandshake();
 }
 
 async function sendHandshake() {
@@ -412,6 +457,7 @@ async function sendHandshake() {
             type: 'HANDSHAKE',
             publicKey: Array.from(new Uint8Array(rawPubKey))
         }));
+        console.log('🤝 Handshake отправлен');
     } catch (e) {
         console.error('Ошибка отправки handshake:', e);
     }
@@ -474,15 +520,13 @@ function resetChat() {
     dataChannel = null;
     activeChat = null;
     sharedSecretKey = null;
+    isConnected = false;
+    isCaller = false;
+    
     chatsList.innerHTML = '';
     activeChatHeader.style.display = 'none';
     inputArea.style.display = 'none';
     messagesContainer.innerHTML = `<div class="system-info" id="system-placeholder">Соединение разорвано</div>`;
-    
-    // Очищаем вызовы
-    if (myId) {
-        database.ref('calls/' + myId).remove();
-    }
 }
 
 function escapeHTML(str) {
