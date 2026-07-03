@@ -88,14 +88,6 @@ auth.onAuthStateChanged(async (user) => {
         await checkAdminStatus();
         showAdminPanel();
         
-        // Автоматически открываем первый чат если есть
-        setTimeout(() => {
-            const firstChat = document.querySelector('.chat-item');
-            if (firstChat) {
-                firstChat.click();
-            }
-        }, 1000);
-        
     } else {
         authScreen.style.display = 'flex';
         appScreen.style.display = 'none';
@@ -153,7 +145,7 @@ function appendMessage(text, dir, timestamp) {
     
     const msgKey = text + timestamp + dir;
     if (loadedMessages.has(msgKey)) {
-        console.log('⚠️ Дубль сообщения:', text);
+        console.log('⚠️ Дубль:', text);
         return;
     }
     loadedMessages.add(msgKey);
@@ -177,7 +169,7 @@ function appendMessage(text, dir, timestamp) {
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
     
-    console.log(`✅ Сообщение показано в чате: ${text} (${dir})`);
+    console.log(`✅ Сообщение показано: ${text} (${dir})`);
 }
 
 function escapeHTML(str) {
@@ -187,10 +179,11 @@ function escapeHTML(str) {
 }
 
 // ============================================
-// 4. ГЛОБАЛЬНЫЙ СЛУШАТЕЛЬ - ОСНОВНОЙ ФИКС!
+// 4. ГЛОБАЛЬНЫЙ СЛУШАТЕЛЬ (ФИКС!)
 // ============================================
 
 function listenForGlobalMessages() {
+    // Слушаем ВСЕ сообщения, которые приходят к НАМ
     database.ref('messages/' + myId).on('child_added', (snapshot) => {
         const data = snapshot.val();
         const fromId = snapshot.key;
@@ -200,19 +193,15 @@ function listenForGlobalMessages() {
         console.log('📩 ПОЛУЧЕНО СООБЩЕНИЕ от:', fromId);
         console.log('📩 Текст:', data.text);
         console.log('📩 Текущий чат:', activeChatId);
-        console.log('📩 Отправитель:', data.from);
-        console.log('📩 Мой ID:', myId);
         
         // Определяем направление
         const dir = data.from === myId ? 'out' : 'in';
         
-        // ПОКАЗЫВАЕМ ВСЕГДА, если чат открыт
+        // ПОКАЗЫВАЕМ СООБЩЕНИЕ В ЧАТЕ (если чат открыт)
         if (activeChatId) {
-            console.log('✅ Чат открыт, показываем сообщение');
+            console.log('✅ Показываем в чате');
             appendMessage(data.text, dir, data.timestamp || Date.now());
             updateLastMessage(fromId, data.text);
-        } else {
-            console.log('⚠️ Чат не открыт, сообщение сохранено в истории');
         }
         
         // Обновляем список чатов
@@ -224,14 +213,9 @@ function listenForGlobalMessages() {
             }
         });
         
-        // Уведомление (только если сообщение не от нас)
+        // Уведомление
         if (data.from !== myId) {
             showNotification(`📩 ${data.name || 'Собеседник'}: ${data.text.substring(0, 30)}`);
-            
-            // Если чат не открыт - обновляем список чатов с новым сообщением
-            if (!activeChatId) {
-                renderChatsList();
-            }
         }
     });
 }
@@ -494,7 +478,7 @@ btnConnect.addEventListener('click', async () => {
 });
 
 // ============================================
-// 9. ОТПРАВКА
+// 9. ОТПРАВКА (ГЛАВНЫЙ ФИКС!)
 // ============================================
 
 btnSend.addEventListener('click', () => {
@@ -503,16 +487,17 @@ btnSend.addEventListener('click', () => {
         alert('❌ Введите сообщение');
         return;
     }
-    if (!remoteId && !activeChatId) {
+    if (!activeChatId) {
         alert('❌ Нет собеседника');
         return;
     }
     
-    const targetId = remoteId || activeChatId;
+    const targetId = activeChatId;
     const timestamp = Date.now();
     
-    console.log('📤 Отправка сообщения:', text, 'кому:', targetId);
+    console.log('📤 ОТПРАВКА сообщения:', text, 'кому:', targetId);
     
+    // Отправляем СОБЕСЕДНИКУ (в его папку messages)
     database.ref('messages/' + targetId + '/' + myId).push().set({
         from: myId,
         text: text,
@@ -520,6 +505,7 @@ btnSend.addEventListener('click', () => {
         timestamp: timestamp
     });
     
+    // Сохраняем У СЕБЯ (в свою папку messages)
     database.ref('messages/' + myId + '/' + targetId).push().set({
         from: myId,
         text: text,
@@ -527,6 +513,7 @@ btnSend.addEventListener('click', () => {
         timestamp: timestamp
     });
     
+    // Показываем сразу
     appendMessage(text, 'out', timestamp);
     updateLastMessage(targetId, text);
     messageInput.value = '';
@@ -698,11 +685,11 @@ async function checkBanned(userId) {
 // ============================================
 
 document.getElementById('chat-header-click')?.addEventListener('click', () => {
-    if (remoteId || activeChatId) showProfile(remoteId || activeChatId);
+    if (activeChatId) showProfile(activeChatId);
 });
 
 document.getElementById('btn-profile')?.addEventListener('click', () => {
-    if (remoteId || activeChatId) showProfile(remoteId || activeChatId);
+    if (activeChatId) showProfile(activeChatId);
 });
 
 document.getElementById('btn-call')?.addEventListener('click', () => {
@@ -741,4 +728,4 @@ document.getElementById('profile-modal')?.addEventListener('click', (e) => {
     }
 });
 
-console.log('✅ App.js загружен! (FIX: сообщения показываются в чате)');
+console.log('✅ App.js загружен! (FIX: сообщения видны у обоих)');
