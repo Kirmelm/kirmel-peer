@@ -729,3 +729,43 @@ document.getElementById('profile-modal')?.addEventListener('click', (e) => {
 });
 
 console.log('✅ App.js загружен! (FIX: сообщения видны у обоих)');
+
+// ============================================
+// ФУНКЦИЯ ПОКАЗА СООБЩЕНИЙ (ФИКС)
+// ============================================
+
+function appendMessage(text, dir, timestamp) {
+    // 1. Находим контейнер
+    const container = document.getElementById('messages-container');
+    if (!container) {
+        console.error('❌ messages-container не найден!');
+        return;
+    }
+    
+    console.log('📝 [appendMessage] Текст:', text);
+    console.log('📝 [appendMessage] Направление:', dir);
+    console.log('📝 [appendMessage] Контейнер найден:', container);
+    
+    // 2. Создаем элемент
+    const div = document.createElement('div');
+    div.className = 'message ' + dir;
+    
+    // 3. Форматируем время
+    const time = new Date(timestamp || Date.now()).toLocaleTimeString('ru-RU', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+    
+    // 4. Вставляем HTML
+    div.innerHTML = `
+        <div>${escapeHTML(text)}</div>
+        <div class="message-time">${time}</div>
+    `;
+    
+    // 5. Добавляем в контейнер
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    
+    console.log('✅ [appendMessage] Сообщение добавлено в чат!');
+    console.log('📝 [appendMessage] Текущее количество сообщений:', container.children.length);
+}
