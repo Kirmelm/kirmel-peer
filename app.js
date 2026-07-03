@@ -88,6 +88,14 @@ auth.onAuthStateChanged(async (user) => {
         await checkAdminStatus();
         showAdminPanel();
         
+        // Автоматически открываем первый чат если есть
+        setTimeout(() => {
+            const firstChat = document.querySelector('.chat-item');
+            if (firstChat) {
+                firstChat.click();
+            }
+        }, 1000);
+        
     } else {
         authScreen.style.display = 'flex';
         appScreen.style.display = 'none';
@@ -138,13 +146,19 @@ function addDateSeparator(dateStr) {
 
 function appendMessage(text, dir, timestamp) {
     const container = document.getElementById('messages-container');
-    if (!container) return;
+    if (!container) {
+        console.error('❌ Контейнер не найден!');
+        return;
+    }
     
     const msgKey = text + timestamp + dir;
-    if (loadedMessages.has(msgKey)) return;
+    if (loadedMessages.has(msgKey)) {
+        console.log('⚠️ Дубль сообщения:', text);
+        return;
+    }
     loadedMessages.add(msgKey);
     
-    const dateStr = formatDate(timestamp);
+    const dateStr = formatDate(timestamp || Date.now());
     
     const separators = container.querySelectorAll('.date-separator');
     let lastSeparator = separators[separators.length - 1];
@@ -155,13 +169,15 @@ function appendMessage(text, dir, timestamp) {
     
     const div = document.createElement('div');
     div.className = 'message ' + dir;
-    const timeStr = formatTime(timestamp);
+    const timeStr = formatTime(timestamp || Date.now());
     div.innerHTML = `
         <div>${escapeHTML(text)}</div>
         <div class="message-time">${timeStr}</div>
     `;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
+    
+    console.log(`✅ Сообщение показано в чате: ${text} (${dir})`);
 }
 
 function escapeHTML(str) {
@@ -171,40 +187,51 @@ function escapeHTML(str) {
 }
 
 // ============================================
-// 4. ГЛОБАЛЬНЫЙ СЛУШАТЕЛЬ (АВТОМАТИЧЕСКИЙ ПРИЕМ)
+// 4. ГЛОБАЛЬНЫЙ СЛУШАТЕЛЬ - ОСНОВНОЙ ФИКС!
 // ============================================
 
 function listenForGlobalMessages() {
-    // Слушаем ВСЕ входящие сообщения
     database.ref('messages/' + myId).on('child_added', (snapshot) => {
         const data = snapshot.val();
         const fromId = snapshot.key;
         
         if (!data || !data.text) return;
         
-        console.log('📩 Новое сообщение от:', fromId, data.text);
+        console.log('📩 ПОЛУЧЕНО СООБЩЕНИЕ от:', fromId);
+        console.log('📩 Текст:', data.text);
+        console.log('📩 Текущий чат:', activeChatId);
+        console.log('📩 Отправитель:', data.from);
+        console.log('📩 Мой ID:', myId);
         
-        // Если это наш собеседник - показываем в чате
-        if (fromId === remoteId || fromId === activeChatId) {
-            // Если чат открыт - показываем сразу
-            const dir = data.from === myId ? 'out' : 'in';
+        // Определяем направление
+        const dir = data.from === myId ? 'out' : 'in';
+        
+        // ПОКАЗЫВАЕМ ВСЕГДА, если чат открыт
+        if (activeChatId) {
+            console.log('✅ Чат открыт, показываем сообщение');
             appendMessage(data.text, dir, data.timestamp || Date.now());
             updateLastMessage(fromId, data.text);
+        } else {
+            console.log('⚠️ Чат не открыт, сообщение сохранено в истории');
         }
         
-        // Сохраняем чат в списке
+        // Обновляем список чатов
         database.ref('users/' + fromId).once('value', (snap) => {
             const user = snap.val();
             if (user) {
                 saveChat(fromId, user.name, user.avatar);
-                // Обновляем последнее сообщение в списке чатов
                 updateLastMessage(fromId, data.text);
             }
         });
         
-        // Уведомление
-        if (fromId !== myId) {
+        // Уведомление (только если сообщение не от нас)
+        if (data.from !== myId) {
             showNotification(`📩 ${data.name || 'Собеседник'}: ${data.text.substring(0, 30)}`);
+            
+            // Если чат не открыт - обновляем список чатов с новым сообщением
+            if (!activeChatId) {
+                renderChatsList();
+            }
         }
     });
 }
@@ -225,6 +252,7 @@ function showNotification(text) {
         animation: slideIn 0.3s ease;
         max-width: 300px;
         cursor: pointer;
+        z-index: 10000;
     `;
     notif.textContent = text;
     notif.onclick = () => notif.remove();
@@ -265,16 +293,18 @@ function loadFullHistory(peerId) {
     loadedMessages.clear();
     activeChatId = peerId;
     
+    console.log('📚 Загружаем историю для:', peerId);
+    
     database.ref('messages/' + myId + '/' + peerId).once('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
-            const messages = Object.values(data).sort((a, b) => a.timestamp - b.timestamp);
+            const messages = Object.values(data).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
             
             let lastDate = '';
             messages.forEach(msg => {
                 if (msg && msg.text) {
                     const dir = msg.from === myId ? 'out' : 'in';
-                    const dateStr = formatDate(msg.timestamp);
+                    const dateStr = formatDate(msg.timestamp || Date.now());
                     
                     if (dateStr !== lastDate) {
                         addDateSeparator(dateStr);
@@ -283,14 +313,14 @@ function loadFullHistory(peerId) {
                     
                     const div = document.createElement('div');
                     div.className = 'message ' + dir;
-                    const timeStr = formatTime(msg.timestamp);
+                    const timeStr = formatTime(msg.timestamp || Date.now());
                     div.innerHTML = `
                         <div>${escapeHTML(msg.text)}</div>
                         <div class="message-time">${timeStr}</div>
                     `;
                     container.appendChild(div);
                     
-                    const msgKey = msg.text + msg.timestamp + dir;
+                    const msgKey = msg.text + (msg.timestamp || Date.now()) + dir;
                     loadedMessages.add(msgKey);
                 }
             });
@@ -310,34 +340,41 @@ function loadFullHistory(peerId) {
 function loadChats() {
     database.ref('chats/' + myId).on('value', (snapshot) => {
         const data = snapshot.val();
-        if (!chatsList) return;
-        chatsList.innerHTML = '';
-        
-        if (!data) {
-            chatsList.innerHTML = `
-                <div class="empty-chats">
-                    <span>💬</span>
-                    <p>Нет активных чатов</p>
-                </div>
-            `;
-            return;
+        renderChatsList(data);
+    });
+}
+
+function renderChatsList(data) {
+    if (!chatsList) return;
+    chatsList.innerHTML = '';
+    
+    if (!data) {
+        chatsList.innerHTML = `
+            <div class="empty-chats">
+                <span>💬</span>
+                <p>Нет активных чатов</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const sorted = Object.values(data).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    sorted.forEach(chat => {
+        const div = document.createElement('div');
+        div.className = 'chat-item';
+        if (chat.peerId === activeChatId) {
+            div.classList.add('active');
         }
-        
-        const sorted = Object.values(data).sort((a, b) => b.timestamp - a.timestamp);
-        sorted.forEach(chat => {
-            const div = document.createElement('div');
-            div.className = 'chat-item';
-            div.dataset.id = chat.peerId;
-            div.innerHTML = `
-                <img class="avatar" src="${chat.avatar || ''}">
-                <div class="user-info">
-                    <div class="user-name">${chat.name}</div>
-                    <div class="chat-status">${chat.lastMessage || 'Новый чат'}</div>
-                </div>
-            `;
-            div.onclick = () => openChat(chat.peerId);
-            chatsList.appendChild(div);
-        });
+        div.dataset.id = chat.peerId;
+        div.innerHTML = `
+            <img class="avatar" src="${chat.avatar || ''}">
+            <div class="user-info">
+                <div class="user-name">${chat.name}</div>
+                <div class="chat-status">${chat.lastMessage || 'Новый чат'}</div>
+            </div>
+        `;
+        div.onclick = () => openChat(chat.peerId);
+        chatsList.appendChild(div);
     });
 }
 
@@ -365,11 +402,11 @@ function updateLastMessage(peerId, text) {
 }
 
 // ============================================
-// 7. ОТКРЫТИЕ ЧАТА (БЕЗ КНОПКИ "ПОДКЛЮЧИТЬСЯ")
+// 7. ОТКРЫТИЕ ЧАТА
 // ============================================
 
 function openChat(peerId) {
-    if (isConnected && remoteId === peerId) return;
+    console.log('📂 Открываем чат с:', peerId);
     
     remoteId = peerId;
     isConnected = true;
@@ -386,7 +423,7 @@ function showChatUI(peerId) {
     if (systemPlaceholder) systemPlaceholder.style.display = 'none';
     if (activeChatHeader) activeChatHeader.style.display = 'flex';
     if (inputArea) inputArea.style.display = 'flex';
-    if (chatName) chatName.textContent = 'Подключение...';
+    if (chatName) chatName.textContent = 'Загрузка...';
     if (chatAvatar) chatAvatar.src = '';
     
     database.ref('users/' + peerId).once('value', async (snap) => {
@@ -422,7 +459,7 @@ function showChatUI(peerId) {
 }
 
 // ============================================
-// 8. КНОПКА "ПОДКЛЮЧИТЬСЯ" (ДЛЯ НОВЫХ ЧАТОВ)
+// 8. КНОПКА "ПОДКЛЮЧИТЬСЯ"
 // ============================================
 
 btnConnect.addEventListener('click', async () => {
@@ -466,21 +503,24 @@ btnSend.addEventListener('click', () => {
         alert('❌ Введите сообщение');
         return;
     }
-    if (!remoteId) {
+    if (!remoteId && !activeChatId) {
         alert('❌ Нет собеседника');
         return;
     }
     
+    const targetId = remoteId || activeChatId;
     const timestamp = Date.now();
     
-    database.ref('messages/' + remoteId + '/' + myId).push().set({
+    console.log('📤 Отправка сообщения:', text, 'кому:', targetId);
+    
+    database.ref('messages/' + targetId + '/' + myId).push().set({
         from: myId,
         text: text,
         name: currentUser.displayName || 'Собеседник',
         timestamp: timestamp
     });
     
-    database.ref('messages/' + myId + '/' + remoteId).push().set({
+    database.ref('messages/' + myId + '/' + targetId).push().set({
         from: myId,
         text: text,
         name: currentUser.displayName || 'Собеседник',
@@ -488,7 +528,7 @@ btnSend.addEventListener('click', () => {
     });
     
     appendMessage(text, 'out', timestamp);
-    updateLastMessage(remoteId, text);
+    updateLastMessage(targetId, text);
     messageInput.value = '';
 });
 
@@ -658,11 +698,11 @@ async function checkBanned(userId) {
 // ============================================
 
 document.getElementById('chat-header-click')?.addEventListener('click', () => {
-    if (remoteId) showProfile(remoteId);
+    if (remoteId || activeChatId) showProfile(remoteId || activeChatId);
 });
 
 document.getElementById('btn-profile')?.addEventListener('click', () => {
-    if (remoteId) showProfile(remoteId);
+    if (remoteId || activeChatId) showProfile(remoteId || activeChatId);
 });
 
 document.getElementById('btn-call')?.addEventListener('click', () => {
@@ -701,4 +741,4 @@ document.getElementById('profile-modal')?.addEventListener('click', (e) => {
     }
 });
 
-console.log('✅ App.js загружен! (автоматический прием сообщений)');
+console.log('✅ App.js загружен! (FIX: сообщения показываются в чате)');
