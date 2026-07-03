@@ -4,7 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KirmelPeer</title>
+    <!-- Стили -->
     <link rel="stylesheet" href="style.css">
+    
+    <!-- ПОДКЛЮЧАЕМ БИБЛИОТЕКИ ПРАВИЛЬНО -->
+    <!-- Firebase (через CDN) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    
+    <!-- PeerJS -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
@@ -37,7 +46,9 @@
                         <button class="btn" id="btn-connect">Подключиться</button>
                     </div>
                 </div>
-                <div class="chats-list" id="chats-list"></div>
+                <div class="chats-list" id="chats-list">
+                    <!-- Список активных чатов -->
+                </div>
             </div>
 
             <!-- Окно чата -->
@@ -64,7 +75,8 @@
         </div>
     </div>
 
-    <!-- ИСПРАВЛЕНО: type="module" загружает код как современный модуль и защищает от кэша -->
-    <script type="module" src="app.js?v=777"></script>
+    <!-- Скрипты приложения (ПОРЯДОК ВАЖЕН!) -->
+    <script src="app.js"></script>
+    <script src="index.js"></script>
 </body>
 </html>
