@@ -4,232 +4,622 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KirmelCrypt</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #182533; color: #f5f5f5; font-family: sans-serif; }
-        
-        #auth-screen { display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .auth-card { background: #17212b; padding: 40px; border-radius: 12px; text-align: center; max-width: 400px; }
-        .auth-card h1 { color: #5288c1; }
-        .btn { background: #5288c1; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; width: 100%; font-size: 16px; }
-        .btn:hover { background: #649ad4; }
-        
-        #app-screen { display: none; height: 100vh; }
-        .container { display: flex; height: 100%; }
-        
-        .sidebar { width: 300px; background: #17212b; border-right: 1px solid #101921; display: flex; flex-direction: column; }
-        .sidebar-header { padding: 16px; border-bottom: 1px solid #101921; }
-        .user-profile { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
-        .avatar { width: 40px; height: 40px; border-radius: 50%; background: #2b394a; object-fit: cover; }
-        .user-name { font-weight: 600; }
-        .my-id { font-size: 12px; color: #708499; cursor: pointer; }
-        .connect-box { display: flex; gap: 6px; margin-top: 10px; }
-        .connect-box input { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #101921; background: #182533; color: white; }
-        .btn-connect { width: 40px; background: #5288c1; border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 18px; }
-        
-        .chats-list { flex: 1; overflow-y: auto; padding: 8px; }
-        .chat-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; }
-        .chat-item:hover { background: #2b394a; }
-        .chat-item.active { background: #2b394a; }
-        .chat-item .user-info { flex: 1; }
-        .chat-item .user-name { font-size: 14px; }
-        .chat-item .chat-status { font-size: 12px; color: #708499; }
-        .empty-chats { text-align: center; color: #708499; padding: 40px; }
-        
-        .main-chat { flex: 1; display: flex; flex-direction: column; background: #182533; }
-        .chat-header { height: 60px; padding: 0 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #101921; background: #17212b; }
-        .chat-header-left { display: flex; align-items: center; gap: 12px; flex: 1; cursor: pointer; }
-        .chat-status { font-size: 12px; color: #708499; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-        .status-dot.online { background: #4cd964; }
-        .status-dot.offline { background: #708499; }
-        
-        /* ===== ЭТО ГЛАВНОЕ - СООБЩЕНИЯ ===== */
-        .messages-container { 
-            flex: 1; 
-            padding: 16px 20px; 
-            overflow-y: auto; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 4px;
-            background: #182533;
-        }
-        
-        .message {
-            max-width: 70%;
-            padding: 8px 14px;
-            border-radius: 16px;
-            font-size: 14px;
-            line-height: 1.4;
-            word-wrap: break-word;
-            margin-bottom: 2px;
-        }
-        
-        .message.out {
-            background: #2b5278;
-            align-self: flex-end;
-            border-bottom-right-radius: 4px;
-            color: #ffffff;
-        }
-        
-        .message.in {
-            background: #1a2a3a;
-            align-self: flex-start;
-            border-bottom-left-radius: 4px;
-            border: 1px solid #2a3a4a;
-            color: #f5f5f5;
-        }
-        
-        .message-time {
-            font-size: 10px;
-            color: #708499;
-            text-align: right;
-            margin-top: 4px;
-        }
-        
-        .date-separator {
-            text-align: center;
-            color: #708499;
-            font-size: 12px;
-            padding: 12px 0 8px 0;
-            width: 100%;
-        }
-        
-        .chat-input-area { padding: 12px 16px; background: #17212b; display: flex; gap: 8px; border-top: 1px solid #101921; }
-        .chat-input-area input { flex: 1; padding: 8px 14px; border-radius: 20px; border: 1px solid #101921; background: #182533; color: white; outline: none; }
-        .btn-send { width: 40px; height: 40px; border-radius: 50%; background: #5288c1; border: none; color: white; cursor: pointer; font-size: 18px; }
-        
-        .system-info { text-align: center; color: #708499; margin: auto; }
-        .system-info .placeholder-icon { font-size: 48px; display: block; margin-bottom: 16px; }
-        
-        #profile-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
-        .modal-content { background: #17212b; border-radius: 16px; padding: 32px; max-width: 400px; width: 90%; position: relative; }
-        .modal-close { position: absolute; top: 12px; right: 16px; font-size: 24px; cursor: pointer; color: #708499; }
-        .profile-modal-body { text-align: center; }
-        .profile-avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 12px; }
-        .profile-name { font-size: 20px; font-weight: 700; }
-        .profile-id { font-size: 13px; color: #708499; }
-        .profile-status { font-size: 14px; color: #708499; }
-        .profile-role { font-size: 12px; color: #ffd700; }
-        .profile-actions { margin-top: 16px; }
-        .profile-actions .btn { width: auto; padding: 8px 20px; }
-        
-        .admin-btn { padding: 4px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; }
-        .admin-btn-danger { background: #dc3545; color: white; }
-        .admin-btn-success { background: #28a745; color: white; }
-        .admin-btn-warning { background: #ffc107; color: #333; }
-        .admin-btn { background: var(--accent); color: white; padding: 4px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; }
-        
-        #admin-panel { display: none; padding: 10px; border-top: 1px solid #101921; }
-        #admin-panel h3 { color: #5288c1; font-size: 14px; }
-        #admin-panel .input-field { width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #101921; background: #182533; color: white; font-size: 12px; }
-        #admin-panel .admin-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
-        #admin-users-list { max-height: 150px; overflow-y: auto; font-size: 12px; }
-        
-        @media (max-width: 768px) {
-            .sidebar { width: 100%; max-height: 35vh; }
-            .container { flex-direction: column; }
-            .main-chat { height: 65vh; }
-            .message { max-width: 85%; }
-        }
-    </style>
-    
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:system-ui,sans-serif; }
+        body { background:#0e1621; color:#fff; overflow:hidden; height:100vh; }
+        
+        /* АВТОРИЗАЦИЯ */
+        #auth { display:flex; align-items:center; justify-content:center; height:100vh; background:#0e1621; }
+        #auth .card { background:#17212b; padding:40px; border-radius:12px; max-width:380px; width:90%; text-align:center; }
+        #auth .card h1 { color:#5288c1; margin-bottom:8px; }
+        #auth .card p { color:#708499; margin-bottom:24px; }
+        #auth .card button { background:#5288c1; color:#fff; border:none; padding:12px; border-radius:8px; width:100%; font-size:16px; cursor:pointer; }
+        #auth .card button:hover { background:#649ad4; }
+        #auth .card .err { color:#e74c3c; margin-top:12px; display:none; }
+        
+        /* ПРИЛОЖЕНИЕ */
+        #app { display:none; height:100vh; }
+        .container { display:flex; height:100%; }
+        
+        /* САЙДБАР */
+        .sidebar { width:300px; background:#17212b; border-right:1px solid #1e2a36; display:flex; flex-direction:column; flex-shrink:0; }
+        .sidebar-header { padding:16px; border-bottom:1px solid #1e2a36; }
+        .sidebar-header h2 { color:#5288c1; font-size:18px; }
+        .user-row { display:flex; align-items:center; gap:10px; margin:12px 0; }
+        .avatar { width:40px; height:40px; border-radius:50%; object-fit:cover; background:#2b394a; }
+        .user-name { font-weight:600; }
+        .user-id { font-size:12px; color:#708499; cursor:pointer; }
+        .connect-row { display:flex; gap:6px; margin-top:8px; }
+        .connect-row input { flex:1; padding:8px 12px; border-radius:8px; border:1px solid #1e2a36; background:#0e1621; color:#fff; outline:none; font-size:14px; }
+        .connect-row input:focus { border-color:#5288c1; }
+        .connect-row button { width:40px; background:#5288c1; border:none; border-radius:8px; color:#fff; font-size:20px; cursor:pointer; }
+        .connect-row button:hover { background:#649ad4; }
+        
+        /* СПИСОК ЧАТОВ */
+        .chats { flex:1; overflow-y:auto; padding:8px; }
+        .chat-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; cursor:pointer; }
+        .chat-item:hover { background:#2b394a; }
+        .chat-item.active { background:#2b394a; }
+        .chat-item .info { flex:1; overflow:hidden; }
+        .chat-item .name { font-weight:600; font-size:14px; }
+        .chat-item .last { font-size:12px; color:#708499; }
+        .empty { text-align:center; color:#708499; padding:40px 0; }
+        .empty span { font-size:40px; display:block; margin-bottom:8px; }
+        
+        /* ОКНО ЧАТА */
+        .chat { flex:1; display:flex; flex-direction:column; background:#0e1621; }
+        .chat-header { height:56px; padding:0 16px; display:flex; align-items:center; gap:12px; background:#17212b; border-bottom:1px solid #1e2a36; flex-shrink:0; }
+        .chat-header .left { display:flex; align-items:center; gap:12px; flex:1; cursor:pointer; }
+        .chat-header .status { font-size:12px; color:#708499; }
+        .chat-header .status .dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:4px; }
+        .chat-header .status .dot.on { background:#4cd964; }
+        .chat-header .status .dot.off { background:#708499; }
+        .chat-header .actions { display:flex; gap:8px; }
+        .chat-header .actions button { background:none; border:none; color:#708499; font-size:18px; cursor:pointer; }
+        .chat-header .actions button:hover { color:#fff; }
+        
+        /* СООБЩЕНИЯ */
+        .msgs { flex:1; padding:16px 20px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
+        .msg { max-width:75%; padding:8px 14px; border-radius:16px; font-size:14px; word-wrap:break-word; }
+        .msg.out { background:#2b5278; align-self:flex-end; border-bottom-right-radius:4px; }
+        .msg.in { background:#1a2a3a; align-self:flex-start; border-bottom-left-radius:4px; border:1px solid #2a3a4a; }
+        .msg .time { font-size:10px; color:#708499; text-align:right; margin-top:4px; }
+        .sep { text-align:center; color:#708499; font-size:12px; padding:12px 0 8px; }
+        .empty-chat { text-align:center; color:#708499; margin:auto; }
+        .empty-chat span { font-size:48px; display:block; margin-bottom:16px; }
+        .empty-chat h3 { color:#fff; margin-bottom:8px; }
+        
+        /* ПАНЕЛЬ ВВОДА */
+        .input-area { padding:12px 16px; background:#17212b; border-top:1px solid #1e2a36; display:flex; gap:8px; align-items:center; flex-shrink:0; }
+        .input-area input { flex:1; padding:8px 16px; border-radius:20px; border:1px solid #1e2a36; background:#0e1621; color:#fff; outline:none; font-size:14px; }
+        .input-area input:focus { border-color:#5288c1; }
+        .input-area .send { width:40px; height:40px; border-radius:50%; background:#5288c1; border:none; color:#fff; font-size:18px; cursor:pointer; flex-shrink:0; }
+        .input-area .send:hover { background:#649ad4; }
+        .input-area .btn-icon { background:none; border:none; color:#708499; font-size:20px; cursor:pointer; padding:4px; }
+        .input-area .btn-icon:hover { color:#fff; }
+        
+        /* АДМИН-ПАНЕЛЬ */
+        #admin-panel { display:none; padding:10px 16px; border-top:1px solid #1e2a36; background:#17212b; }
+        #admin-panel h4 { color:#5288c1; font-size:13px; margin-bottom:6px; }
+        #admin-panel input { width:100%; padding:6px 10px; border-radius:4px; border:1px solid #1e2a36; background:#0e1621; color:#fff; font-size:12px; margin-bottom:6px; }
+        #admin-panel .row { display:flex; gap:6px; flex-wrap:wrap; }
+        #admin-panel .row button { padding:4px 10px; border:none; border-radius:4px; font-size:11px; cursor:pointer; }
+        #admin-panel .row .danger { background:#e74c3c; color:#fff; }
+        #admin-panel .row .success { background:#27ae60; color:#fff; }
+        #admin-panel .row .warning { background:#f39c12; color:#fff; }
+        #admin-panel .row .info { background:#5288c1; color:#fff; }
+        #admin-panel .list { max-height:120px; overflow-y:auto; font-size:12px; margin-top:6px; }
+        #admin-panel .list div { padding:4px; border-bottom:1px solid #1e2a36; display:flex; justify-content:space-between; }
+        
+        /* ПРОФИЛЬ */
+        #profile { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; }
+        #profile .modal { background:#17212b; border-radius:16px; padding:32px; max-width:360px; width:90%; position:relative; text-align:center; }
+        #profile .modal .close { position:absolute; top:12px; right:16px; font-size:24px; cursor:pointer; color:#708499; }
+        #profile .modal .close:hover { color:#fff; }
+        #profile .modal .p-avatar { width:80px; height:80px; border-radius:50%; object-fit:cover; margin-bottom:12px; }
+        #profile .modal .p-name { font-size:20px; font-weight:700; }
+        #profile .modal .p-id { font-size:13px; color:#708499; }
+        #profile .modal .p-status { font-size:14px; color:#708499; }
+        #profile .modal .p-role { font-size:12px; color:#ffd700; }
+        #profile .modal .p-btn { margin-top:16px; }
+        #profile .modal .p-btn button { background:#5288c1; color:#fff; border:none; padding:8px 20px; border-radius:8px; cursor:pointer; }
+        
+        @media (max-width:600px) {
+            .sidebar { width:100%; max-height:35vh; }
+            .container { flex-direction:column; }
+            .chat { height:65vh; }
+            .msg { max-width:85%; }
+        }
+    </style>
 </head>
 <body>
 
-    <!-- ЭКРАН ВХОДА -->
-    <div id="auth-screen">
-        <div class="auth-card">
-            <h1>🔐 KirmelCrypt</h1>
-            <p>Безопасный P2P-мессенджер</p>
-            <button class="btn" id="btn-login">Войти через Google</button>
-            <div id="error-message" style="color:#ec5b5b;margin-top:15px;display:none;"></div>
-        </div>
+<!-- ========== ЭКРАН ВХОДА ========== -->
+<div id="auth">
+    <div class="card">
+        <h1>🔐 KirmelCrypt</h1>
+        <p>Безопасный P2P-мессенджер</p>
+        <button id="loginBtn">Войти через Google</button>
+        <div class="err" id="authError"></div>
     </div>
+</div>
 
-    <!-- ГЛАВНЫЙ ЭКРАН -->
-    <div id="app-screen">
-        <div class="container">
-            <div class="sidebar">
-                <div class="sidebar-header">
-                    <h2 style="color:#5288c1;">🔐 KirmelCrypt</h2>
-                    <div class="user-profile">
-                        <img id="my-avatar" class="avatar" src="">
-                        <div class="user-info">
-                            <div id="my-name" class="user-name">Загрузка...</div>
-                            <div id="my-id-display" class="my-id">ID: тестируется...</div>
+<!-- ========== ПРИЛОЖЕНИЕ ========== -->
+<div id="app">
+    <div class="container">
+        
+        <!-- САЙДБАР -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>🔐 KirmelCrypt</h2>
+                <div class="user-row">
+                    <img class="avatar" id="myAvatar" src="">
+                    <div>
+                        <div class="user-name" id="myName">Загрузка...</div>
+                        <div class="user-id" id="myIdDisplay">ID: ...</div>
+                    </div>
+                </div>
+                <div class="connect-row">
+                    <input type="text" id="peerInput" placeholder="Введите ID собеседника">
+                    <button id="connectBtn">➕</button>
+                </div>
+            </div>
+            <div class="chats" id="chatsList">
+                <div class="empty"><span>💬</span>Нет активных чатов</div>
+            </div>
+            
+            <!-- АДМИН-ПАНЕЛЬ -->
+            <div id="admin-panel">
+                <h4>👑 Админ-панель</h4>
+                <input type="text" id="adminUserId" placeholder="ID пользователя">
+                <div class="row">
+                    <button class="danger" id="banBtn">🚫 Бан</button>
+                    <button class="success" id="unbanBtn">✅ Разбан</button>
+                    <button class="warning" id="makeAdminBtn">⭐ Назначить админа</button>
+                </div>
+                <button class="info" id="showUsersBtn" style="width:100%;margin-top:4px;">📋 Список пользователей</button>
+                <div class="list" id="adminUsersList"></div>
+            </div>
+        </div>
+        
+        <!-- ЧАТ -->
+        <div class="chat">
+            <div class="chat-header" id="chatHeader" style="display:none;">
+                <div class="left" id="chatHeaderClick">
+                    <img class="avatar" id="chatAvatar" src="">
+                    <div>
+                        <div class="user-name" id="chatName">Собеседник</div>
+                        <div class="status">
+                            <span class="dot off" id="statusDot"></span>
+                            <span id="statusText">Подключение...</span>
                         </div>
                     </div>
-                    <div class="connect-box">
-                        <input type="text" id="peer-id-input" placeholder="Введите ID собеседника">
-                        <button class="btn-connect" id="btn-connect">➕</button>
-                    </div>
                 </div>
-                <div class="chats-list" id="chats-list">
-                    <div class="empty-chats"><span>💬</span><p>Нет активных чатов</p></div>
-                </div>
-                <div id="admin-panel">
-                    <h3>👑 Админ-панель</h3>
-                    <input type="text" id="admin-user-id" class="input-field" placeholder="ID пользователя">
-                    <div class="admin-buttons">
-                        <button class="admin-btn admin-btn-danger" id="btn-ban">🚫 Бан</button>
-                        <button class="admin-btn admin-btn-success" id="btn-unban">✅ Разбан</button>
-                        <button class="admin-btn admin-btn-warning" id="btn-make-admin">⭐ Назначить админа</button>
-                    </div>
-                    <button class="admin-btn" id="btn-show-users" style="width:100%;">📋 Список пользователей</button>
-                    <div id="admin-users-list"></div>
+                <div class="actions">
+                    <button id="profileBtn">👤</button>
+                    <button id="callBtn">📞</button>
                 </div>
             </div>
-            <div class="main-chat">
-                <div class="chat-header" id="active-chat-header" style="display:none;">
-                    <div class="chat-header-left" id="chat-header-click">
-                        <img id="chat-avatar" class="avatar" src="">
-                        <div class="chat-header-info">
-                            <div id="chat-name" class="user-name">Собеседник</div>
-                            <div class="chat-status">
-                                <span class="status-dot"></span>
-                                <span id="chat-status-text">Подключение...</span>
-                            </div>
-                        </div>
-                    </div>
-                    <button class="header-btn" id="btn-profile" style="background:none;border:none;color:#708499;font-size:18px;cursor:pointer;">👤</button>
+            
+            <div class="msgs" id="msgContainer">
+                <div class="empty-chat">
+                    <span>🔐</span>
+                    <h3>Безопасный чат</h3>
+                    <p>Введите ID друга для начала защищенной сессии</p>
                 </div>
-                <div class="messages-container" id="messages-container">
-                    <div class="system-info" id="system-placeholder">
-                        <span class="placeholder-icon">🔐</span>
-                        <h3>Безопасный чат</h3>
-                        <p>Введите ID друга для начала защищенной сессии</p>
-                    </div>
-                </div>
-                <div class="chat-input-area" id="input-area" style="display:none;">
-                    <input type="text" id="message-input" placeholder="Напишите сообщение...">
-                    <button class="btn-send" id="btn-send">➤</button>
-                </div>
+            </div>
+            
+            <div class="input-area" id="inputArea" style="display:none;">
+                <button class="btn-icon" id="emojiBtn">😊</button>
+                <input type="text" id="msgInput" placeholder="Напишите сообщение...">
+                <button class="send" id="sendBtn">➤</button>
             </div>
         </div>
+        
     </div>
+</div>
 
-    <!-- МОДАЛЬНОЕ ОКНО ПРОФИЛЯ -->
-    <div id="profile-modal">
-        <div class="modal-content">
-            <div class="modal-close" id="profile-modal-close">✕</div>
-            <div class="profile-modal-body">
-                <img id="profile-avatar" class="profile-avatar" src="">
-                <div id="profile-name" class="profile-name">Имя</div>
-                <div id="profile-id" class="profile-id">ID: ...</div>
-                <div id="profile-status" class="profile-status">Статус</div>
-                <div id="profile-role" class="profile-role">Роль</div>
-                <div class="profile-actions">
-                    <button class="btn" id="profile-chat" style="width:auto;padding:8px 20px;">💬 Написать</button>
+<!-- ========== ПРОФИЛЬ ========== -->
+<div id="profile">
+    <div class="modal">
+        <div class="close" id="profileClose">✕</div>
+        <img class="p-avatar" id="pAvatar" src="">
+        <div class="p-name" id="pName">Имя</div>
+        <div class="p-id" id="pId">ID: ...</div>
+        <div class="p-status" id="pStatus">Статус</div>
+        <div class="p-role" id="pRole">Роль</div>
+        <div class="p-btn"><button id="pChatBtn">💬 Написать</button></div>
+    </div>
+</div>
+
+<!-- ========== JAVASCRIPT ========== -->
+<script>
+// ============================================================
+// FIREBASE
+// ============================================================
+const firebaseConfig = {
+    apiKey: "AIzaSyCpqM2Mbz_0l1hB5BLgQ80F8GYFKdSw3PA",
+    authDomain: "kirmelcript.firebaseapp.com",
+    projectId: "kirmelcript",
+    storageBucket: "kirmelcript.firebasestorage.app",
+    messagingSenderId: "668992683850",
+    appId: "1:668992683850:web:c2f76667fafac7cd714bb3",
+    measurementId: "G-MD938Z2WX6"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+
+// ============================================================
+// ПЕРЕМЕННЫЕ
+// ============================================================
+let myId = null;
+let chatWith = null;
+let currentUser = null;
+let isAdmin = false;
+let isCreator = false;
+let loaded = new Set();
+
+// ============================================================
+// DOM
+// ============================================================
+const $ = id => document.getElementById(id);
+const loginBtn = $('loginBtn');
+const authError = $('authError');
+const app = $('app');
+const authScreen = $('auth');
+const myAvatar = $('myAvatar');
+const myName = $('myName');
+const myIdDisplay = $('myIdDisplay');
+const peerInput = $('peerInput');
+const connectBtn = $('connectBtn');
+const chatsList = $('chatsList');
+const msgContainer = $('msgContainer');
+const chatHeader = $('chatHeader');
+const chatAvatar = $('chatAvatar');
+const chatName = $('chatName');
+const statusDot = $('statusDot');
+const statusText = $('statusText');
+const inputArea = $('inputArea');
+const msgInput = $('msgInput');
+const sendBtn = $('sendBtn');
+const chatHeaderClick = $('chatHeaderClick');
+const profileBtn = $('profileBtn');
+const callBtn = $('callBtn');
+const emojiBtn = $('emojiBtn');
+
+const adminPanel = $('admin-panel');
+const adminUserId = $('adminUserId');
+const banBtn = $('banBtn');
+const unbanBtn = $('unbanBtn');
+const makeAdminBtn = $('makeAdminBtn');
+const showUsersBtn = $('showUsersBtn');
+const adminUsersList = $('adminUsersList');
+
+const profile = $('profile');
+const profileClose = $('profileClose');
+const pAvatar = $('pAvatar');
+const pName = $('pName');
+const pId = $('pId');
+const pStatus = $('pStatus');
+const pRole = $('pRole');
+const pChatBtn = $('pChatBtn');
+
+// ============================================================
+// 1. ВХОД
+// ============================================================
+loginBtn.onclick = () => {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(err => {
+        authError.textContent = err.message;
+        authError.style.display = 'block';
+    });
+};
+
+auth.onAuthStateChanged(user => {
+    if (user) {
+        currentUser = user;
+        authScreen.style.display = 'none';
+        app.style.display = 'block';
+        
+        myId = user.uid;
+        myAvatar.src = user.photoURL || '';
+        myName.textContent = user.displayName || 'Аноним';
+        myIdDisplay.textContent = `ID: ${myId.substring(0,12)} (клик)`;
+        myIdDisplay.onclick = () => {
+            navigator.clipboard.writeText(myId.substring(0,12));
+            alert('✅ ID скопирован!');
+        };
+        
+        db.ref('users/' + myId).set({
+            name: user.displayName,
+            avatar: user.photoURL,
+            online: true
+        });
+        
+        loadChats();
+        listenMessages();
+        checkAdmin();
+    } else {
+        authScreen.style.display = 'flex';
+        app.style.display = 'none';
+    }
+});
+
+// ============================================================
+// 2. СООБЩЕНИЯ
+// ============================================================
+function showMsg(text, who, time) {
+    const date = new Date(time || Date.now());
+    const dateStr = date.toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
+    const timeStr = date.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
+    
+    const key = text + time + who;
+    if (loaded.has(key)) return;
+    loaded.add(key);
+    
+    const separators = msgContainer.querySelectorAll('.sep');
+    let last = separators[separators.length-1];
+    if (!last || last.textContent !== dateStr) {
+        const s = document.createElement('div');
+        s.className = 'sep';
+        s.textContent = dateStr;
+        msgContainer.appendChild(s);
+    }
+    
+    const div = document.createElement('div');
+    div.className = 'msg ' + who;
+    div.innerHTML = `<div>${text}</div><div class="time">${timeStr}</div>`;
+    msgContainer.appendChild(div);
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+}
+
+// ============================================================
+// 3. СЛУШАТЕЛЬ
+// ============================================================
+function listenMessages() {
+    db.ref('messages/' + myId).on('child_added', snap => {
+        const data = snap.val();
+        if (!data || !data.text || data.from === myId) return;
+        
+        if (chatWith && chatWith === snap.key) {
+            showMsg(data.text, 'in', data.timestamp);
+            updateLast(snap.key, data.text);
+        }
+        
+        db.ref('users/' + snap.key).once('value', s => {
+            const u = s.val();
+            if (u) saveChat(snap.key, u.name, u.avatar);
+        });
+    });
+}
+
+// ============================================================
+// 4. ИСТОРИЯ
+// ============================================================
+function loadHistory(peerId) {
+    msgContainer.innerHTML = '';
+    loaded.clear();
+    chatWith = peerId;
+    
+    db.ref('messages/' + myId + '/' + peerId).once('value', snap => {
+        const data = snap.val();
+        if (data) {
+            const msgs = Object.values(data).sort((a,b) => (a.timestamp||0) - (b.timestamp||0));
+            msgs.forEach(m => {
+                if (m && m.text) {
+                    showMsg(m.text, m.from === myId ? 'out' : 'in', m.timestamp);
+                }
+            });
+        }
+    });
+}
+
+// ============================================================
+// 5. ЧАТЫ
+// ============================================================
+function loadChats() {
+    db.ref('chats/' + myId).on('value', snap => {
+        const data = snap.val();
+        chatsList.innerHTML = '';
+        if (!data) {
+            chatsList.innerHTML = '<div class="empty"><span>💬</span>Нет активных чатов</div>';
+            return;
+        }
+        const arr = Object.values(data).sort((a,b) => (b.timestamp||0) - (a.timestamp||0));
+        arr.forEach(chat => {
+            const div = document.createElement('div');
+            div.className = 'chat-item';
+            if (chat.peerId === chatWith) div.classList.add('active');
+            div.dataset.id = chat.peerId;
+            div.innerHTML = `
+                <img class="avatar" src="${chat.avatar || ''}">
+                <div class="info">
+                    <div class="name">${chat.name}</div>
+                    <div class="last">${chat.lastMessage || 'Новый чат'}</div>
                 </div>
-            </div>
-        </div>
-    </div>
+            `;
+            div.onclick = () => openChat(chat.peerId);
+            chatsList.appendChild(div);
+        });
+    });
+}
 
-    <script src="app.js"></script>
-    <script src="index.js"></script>
+function saveChat(peerId, name, avatar) {
+    db.ref('chats/' + myId + '/' + peerId).once('value', snap => {
+        if (!snap.exists()) {
+            db.ref('chats/' + myId + '/' + peerId).set({
+                peerId, name: name || 'Собеседник', avatar: avatar || '', lastMessage: '', timestamp: Date.now()
+            });
+        }
+    });
+}
+
+function updateLast(peerId, text) {
+    db.ref('chats/' + myId + '/' + peerId).update({
+        lastMessage: text.substring(0,50),
+        timestamp: Date.now()
+    });
+}
+
+// ============================================================
+// 6. ОТКРЫТЬ ЧАТ
+// ============================================================
+function openChat(peerId) {
+    chatWith = peerId;
+    peerInput.value = peerId;
+    chatHeader.style.display = 'flex';
+    inputArea.style.display = 'flex';
+    chatName.textContent = 'Загрузка...';
+    chatAvatar.src = '';
+    
+    const empty = msgContainer.querySelector('.empty-chat');
+    if (empty) empty.style.display = 'none';
+    
+    db.ref('users/' + peerId).once('value', snap => {
+        const user = snap.val();
+        if (user) {
+            chatName.textContent = user.name || 'Собеседник';
+            chatAvatar.src = user.avatar || '';
+        }
+    });
+    
+    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+    const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
+    if (item) item.classList.add('active');
+    
+    statusDot.className = 'dot on';
+    statusText.textContent = 'Онлайн ✅';
+    
+    loadHistory(peerId);
+}
+
+// ============================================================
+// 7. ПОДКЛЮЧИТЬСЯ
+// ============================================================
+connectBtn.onclick = async () => {
+    const target = peerInput.value.trim();
+    if (!target) return alert('Введите ID');
+    if (target === myId) return alert('Нельзя к себе');
+    
+    const snap = await db.ref('users/' + target).once('value');
+    if (!snap.exists()) return alert('Пользователь не найден');
+    
+    const user = snap.val();
+    saveChat(target, user.name, user.avatar);
+    openChat(target);
+};
+
+// ============================================================
+// 8. ОТПРАВИТЬ
+// ============================================================
+sendBtn.onclick = () => {
+    const text = msgInput.value.trim();
+    if (!text) return alert('Введите сообщение');
+    if (!chatWith) return alert('Нет собеседника');
+    
+    const ts = Date.now();
+    db.ref('messages/' + chatWith + '/' + myId).push().set({
+        from: myId, text, name: currentUser.displayName, timestamp: ts
+    });
+    db.ref('messages/' + myId + '/' + chatWith).push().set({
+        from: myId, text, name: currentUser.displayName, timestamp: ts
+    });
+    
+    showMsg(text, 'out', ts);
+    updateLast(chatWith, text);
+    msgInput.value = '';
+};
+
+msgInput.onkeydown = e => {
+    if (e.key === 'Enter') sendBtn.click();
+};
+
+// ============================================================
+// 9. ЭМОДЗИ
+// ============================================================
+emojiBtn.onclick = () => {
+    const emojis = ['😊','😂','❤️','🔥','👍','👋','🎉','✨','💪','🤝'];
+    msgInput.value += emojis[Math.floor(Math.random() * emojis.length)];
+    msgInput.focus();
+};
+
+// ============================================================
+// 10. ПРОФИЛЬ
+// ============================================================
+function showProfile(userId) {
+    db.ref('users/' + userId).once('value', async snap => {
+        const user = snap.val();
+        if (!user) return;
+        pAvatar.src = user.avatar || '';
+        pName.textContent = user.name || 'Без имени';
+        pId.textContent = 'ID: ' + userId.substring(0,12);
+        pStatus.textContent = user.online ? '🟢 Онлайн' : '⚫ Офлайн';
+        const role = await getUserRole(userId);
+        pRole.textContent = role === 'creator' ? '👑 Создатель' : role === 'admin' ? '⭐ Админ' : 'Пользователь';
+        profile.style.display = 'flex';
+    });
+}
+
+chatHeaderClick.onclick = () => { if (chatWith) showProfile(chatWith); };
+profileBtn.onclick = () => { if (chatWith) showProfile(chatWith); };
+profileClose.onclick = () => profile.style.display = 'none';
+profile.onclick = e => { if (e.target === e.currentTarget) profile.style.display = 'none'; };
+pChatBtn.onclick = () => {
+    profile.style.display = 'none';
+    if (chatWith) openChat(chatWith);
+};
+
+callBtn.onclick = () => alert('📞 Функция звонков в разработке!');
+
+// ============================================================
+// 11. РОЛИ
+// ============================================================
+async function checkAdmin() {
+    const c = await db.ref('creator').once('value');
+    if (c.exists() && c.val() === myId) { isCreator = true; isAdmin = true; }
+    else {
+        const a = await db.ref('admins/' + myId).once('value');
+        if (a.exists()) isAdmin = true;
+    }
+    if (isAdmin || isCreator) adminPanel.style.display = 'block';
+}
+
+async function getUserRole(userId) {
+    const c = await db.ref('creator').once('value');
+    if (c.exists() && c.val() === userId) return 'creator';
+    const a = await db.ref('admins/' + userId).once('value');
+    if (a.exists()) return 'admin';
+    return 'user';
+}
+
+async function isBanned(userId) {
+    const s = await db.ref('banned/' + userId).once('value');
+    return s.exists();
+}
+
+banBtn.onclick = async () => {
+    const id = adminUserId.value.trim();
+    if (!id) return alert('Введите ID');
+    if (!isAdmin && !isCreator) return alert('Нет прав');
+    await db.ref('banned/' + id).set({ bannedAt: Date.now(), reason: 'Нарушение', bannedBy: myId });
+    alert('✅ Забанен');
+};
+
+unbanBtn.onclick = async () => {
+    const id = adminUserId.value.trim();
+    if (!id) return alert('Введите ID');
+    if (!isAdmin && !isCreator) return alert('Нет прав');
+    await db.ref('banned/' + id).remove();
+    alert('✅ Разбанен');
+};
+
+makeAdminBtn.onclick = async () => {
+    const id = adminUserId.value.trim();
+    if (!id) return alert('Введите ID');
+    if (!isCreator) return alert('Только создатель');
+    const snap = await db.ref('users/' + id).once('value');
+    if (!snap.exists()) return alert('Пользователь не найден');
+    await db.ref('admins/' + id).set({ role: 'admin', name: snap.val().name, addedAt: Date.now() });
+    alert('✅ Админ назначен');
+};
+
+showUsersBtn.onclick = async () => {
+    if (!isAdmin && !isCreator) return alert('Нет прав');
+    const snap = await db.ref('users').once('value');
+    const users = snap.val();
+    let html = '';
+    for (const [id, user] of Object.entries(users || {})) {
+        const banned = await isBanned(id);
+        html += `<div><span>${user.name || 'Без имени'}</span><span>${banned ? '🚫' : '✅'}</span></div>`;
+    }
+    adminUsersList.innerHTML = html || '<div style="color:#708499;">Нет пользователей</div>';
+};
+
+console.log('✅ KirmelCrypt загружен!');
+</script>
 </body>
 </html>
