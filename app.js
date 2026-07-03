@@ -26,7 +26,7 @@ let remoteId = null;
 let isCaller = false;
 let isConnected = false;
 let isProcessingCall = false;
-let myChats = {}; // Хранит все чаты пользователя
+let myChats = {};
 
 // DOM Элементы
 const authScreen = document.getElementById('auth-screen');
@@ -52,7 +52,9 @@ const inputArea = document.getElementById('input-area');
 const messageInput = document.getElementById('message-input');
 const btnSend = document.getElementById('btn-send');
 
-// --- АВТОРИЗАЦИЯ ---
+// ============================================
+// 1. АВТОРИЗАЦИЯ
+// ============================================
 
 btnLogin.addEventListener('click', () => {
     const provider = new firebase.auth.GoogleAuthProvider();
@@ -70,7 +72,7 @@ auth.onAuthStateChanged((user) => {
         initUserMetadata();
         generateUserId();
         showAdminPanel();
-        loadChats(); // ЗАГРУЖАЕМ СОХРАНЕННЫЕ ЧАТЫ
+        loadChats();
     } else {
         authScreen.style.display = 'flex';
         appScreen.style.display = 'none';
@@ -82,7 +84,9 @@ function initUserMetadata() {
     myName.innerText = currentUser.displayName || 'Аноним';
 }
 
-// --- ГЕНЕРАЦИЯ ID ---
+// ============================================
+// 2. ГЕНЕРАЦИЯ ID
+// ============================================
 
 function generateUserId() {
     myId = currentUser.uid.substring(0, 12);
@@ -111,9 +115,10 @@ function generateUserId() {
     listenForCalls();
 }
 
-// --- СОХРАНЕНИЕ И ЗАГРУЗКА ЧАТОВ ---
+// ============================================
+// 3. РАБОТА С ЧАТАМИ (СОХРАНЕНИЕ/ЗАГРУЗКА)
+// ============================================
 
-// Сохранить чат в Firebase
 function saveChat(peerId) {
     if (!myId || !peerId) return;
     
@@ -127,15 +132,12 @@ function saveChat(peerId) {
                 lastMessage: '',
                 timestamp: Date.now()
             };
-            
-            // Сохраняем в список чатов пользователя
             database.ref('chats/' + myId + '/' + peerId).set(chatData);
             myChats[peerId] = chatData;
         }
     });
 }
 
-// Загрузить сохраненные чаты
 function loadChats() {
     if (!myId) return;
     
@@ -145,19 +147,17 @@ function loadChats() {
             myChats = data;
             renderChatsList();
         } else {
-            // Показываем пустой список
             showEmptyChats();
         }
     });
 }
 
-// Показать список чатов
 function renderChatsList() {
     const list = document.getElementById('chats-list');
+    if (!list) return;
     list.innerHTML = '';
     
-    // Сортируем по времени (последние сверху)
-    const sortedChats = Object.values(myChats).sort((a, b) => b.timestamp - a.timestamp);
+    const sortedChats = Object.values(myChats).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     
     if (sortedChats.length === 0) {
         showEmptyChats();
@@ -189,6 +189,7 @@ function renderChatsList() {
 
 function showEmptyChats() {
     const list = document.getElementById('chats-list');
+    if (!list) return;
     list.innerHTML = `
         <div class="empty-chats">
             <span>💬</span>
@@ -198,7 +199,6 @@ function showEmptyChats() {
     `;
 }
 
-// Обновить последнее сообщение в чате
 function updateLastMessage(peerId, message) {
     if (!myId || !peerId) return;
     
@@ -209,7 +209,39 @@ function updateLastMessage(peerId, message) {
     });
 }
 
-// --- КРИПТОГРАФИЯ ---
+// ============================================
+// 4. ОТКРЫТИЕ ЧАТА (ОПРЕДЕЛЕНА ДО ИСПОЛЬЗОВАНИЯ)
+// ============================================
+
+function openChat(peerId) {
+    if (isConnected && remoteId === peerId) return;
+    
+    // Закрываем текущее соединение если есть
+    if (myPeerConnection) {
+        myPeerConnection.close();
+        myPeerConnection = null;
+    }
+    dataChannel = null;
+    isConnected = false;
+    
+    remoteId = peerId;
+    isCaller = true;
+    
+    // Показываем чат
+    showChat(peerId);
+    
+    // Подсвечиваем в списке
+    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+    const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
+    if (item) item.classList.add('active');
+    
+    // Начинаем звонок
+    startCall(peerId);
+}
+
+// ============================================
+// 5. КРИПТОГРАФИЯ
+// ============================================
 
 async function generateKeyPair() {
     return await window.crypto.subtle.generateKey(
@@ -279,7 +311,9 @@ async function decryptMessage(encryptedObj, key) {
     }
 }
 
-// --- WEBRTC ---
+// ============================================
+// 6. WEBRTC
+// ============================================
 
 const rtcConfig = {
     iceServers: [
@@ -384,7 +418,7 @@ async function handleIncomingCall(callerId, data) {
         console.log('✅ Ответ отправлен');
         
         remoteId = callerId;
-        saveChat(callerId); // СОХРАНЯЕМ ЧАТ
+        saveChat(callerId);
         showChat(callerId);
         
     } catch (e) {
@@ -423,7 +457,7 @@ function setupDataChannel() {
     dataChannel.onopen = () => {
         console.log('✅ Канал данных открыт!');
         isConnected = true;
-        saveChat(remoteId); // СОХРАНЯЕМ ЧАТ ПРИ ПОДКЛЮЧЕНИИ
+        saveChat(remoteId);
         renderChatLayout();
         sendHandshake();
     };
@@ -462,7 +496,7 @@ function setupDataChannel() {
                 }
                 const decryptedText = await decryptMessage(data.encrypted, sharedSecretKey);
                 appendMessage(decryptedText, 'in');
-                updateLastMessage(remoteId, decryptedText); // ОБНОВЛЯЕМ ПОСЛЕДНЕЕ СООБЩЕНИЕ
+                updateLastMessage(remoteId, decryptedText);
             } else if (data.type === 'IMAGE') {
                 if (!sharedSecretKey) return;
                 const decryptedImage = await decryptMessage(data.encrypted, sharedSecretKey);
@@ -475,7 +509,9 @@ function setupDataChannel() {
     };
 }
 
-// --- ВЫЗОВ СОБЕСЕДНИКА ---
+// ============================================
+// 7. ВЫЗОВ СОБЕСЕДНИКА
+// ============================================
 
 btnConnect.addEventListener('click', async () => {
     const peerId = peerIdInput.value.trim();
@@ -508,7 +544,7 @@ btnConnect.addEventListener('click', async () => {
     
     remoteId = peerId;
     isCaller = true;
-    saveChat(peerId); // СОХРАНЯЕМ ЧАТ
+    saveChat(peerId);
     await startCall(peerId);
 });
 
@@ -570,14 +606,16 @@ async function startCall(peerId) {
     }
 }
 
-// --- ИНТЕРФЕЙС ---
+// ============================================
+// 8. ИНТЕРФЕЙС
+// ============================================
 
 function showChat(peerId) {
     systemPlaceholder.style.display = 'none';
     activeChatHeader.style.display = 'flex';
+    inputArea.style.display = 'flex';
     chatName.innerText = 'Подключение...';
     chatAvatar.src = '';
-    inputArea.style.display = 'flex';
     
     database.ref('users/' + peerId).once('value', (snapshot) => {
         const user = snapshot.val();
@@ -588,7 +626,6 @@ function showChat(peerId) {
         }
     });
     
-    // Подсвечиваем в списке
     document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
     const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
     if (item) item.classList.add('active');
@@ -647,7 +684,9 @@ async function sendHandshake() {
     }
 }
 
-// --- ОТПРАВКА СООБЩЕНИЙ ---
+// ============================================
+// 9. ОТПРАВКА СООБЩЕНИЙ
+// ============================================
 
 async function handleSendMessage() {
     const text = messageInput.value.trim();
@@ -684,7 +723,9 @@ messageInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleSendMessage();
 });
 
-// --- ОТПРАВКА ИЗОБРАЖЕНИЙ ---
+// ============================================
+// 10. ОТПРАВКА ИЗОБРАЖЕНИЙ
+// ============================================
 
 let fileInput = null;
 
@@ -766,7 +807,9 @@ function appendMessage(text, direction) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-// --- ПРОФИЛЬ ---
+// ============================================
+// 11. ПРОФИЛЬ
+// ============================================
 
 document.getElementById('chat-header-click')?.addEventListener('click', () => {
     if (remoteId) {
@@ -832,7 +875,9 @@ async function showProfile(userId) {
     }
 }
 
-// --- АДМИН-ФУНКЦИИ ---
+// ============================================
+// 12. АДМИН-ФУНКЦИИ
+// ============================================
 
 async function checkIfAdmin() {
     if (!currentUser) return false;
@@ -885,15 +930,11 @@ function getRoleColor(role) {
     return '#708499';
 }
 
-// --- АДМИН ПАНЕЛЬ ---
-
 async function showAdminPanel() {
     const isAdmin = await checkIfAdmin();
     const isCreator = await checkIfCreator();
     const panel = document.getElementById('admin-panel');
-    
     if (!panel) return;
-    
     if (isAdmin || isCreator) {
         panel.style.display = 'block';
     }
@@ -994,7 +1035,9 @@ async function makeAdmin(userId) {
     }
 }
 
-// --- RESET ---
+// ============================================
+// 13. RESET
+// ============================================
 
 function resetChat() {
     if (myPeerConnection) {
