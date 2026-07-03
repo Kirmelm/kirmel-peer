@@ -10,8 +10,6 @@
     <style>
         * { margin:0; padding:0; box-sizing:border-box; font-family:system-ui,sans-serif; }
         body { background:#0e1621; color:#fff; overflow:hidden; height:100vh; }
-        
-        /* АВТОРИЗАЦИЯ */
         #auth { display:flex; align-items:center; justify-content:center; height:100vh; background:#0e1621; }
         #auth .card { background:#17212b; padding:40px; border-radius:12px; max-width:380px; width:90%; text-align:center; }
         #auth .card h1 { color:#5288c1; margin-bottom:8px; }
@@ -19,12 +17,8 @@
         #auth .card button { background:#5288c1; color:#fff; border:none; padding:12px; border-radius:8px; width:100%; font-size:16px; cursor:pointer; }
         #auth .card button:hover { background:#649ad4; }
         #auth .card .err { color:#e74c3c; margin-top:12px; display:none; }
-        
-        /* ПРИЛОЖЕНИЕ */
         #app { display:none; height:100vh; }
         .container { display:flex; height:100%; }
-        
-        /* САЙДБАР */
         .sidebar { width:300px; background:#17212b; border-right:1px solid #1e2a36; display:flex; flex-direction:column; flex-shrink:0; }
         .sidebar-header { padding:16px; border-bottom:1px solid #1e2a36; }
         .sidebar-header h2 { color:#5288c1; font-size:18px; }
@@ -37,8 +31,6 @@
         .connect-row input:focus { border-color:#5288c1; }
         .connect-row button { width:40px; background:#5288c1; border:none; border-radius:8px; color:#fff; font-size:20px; cursor:pointer; }
         .connect-row button:hover { background:#649ad4; }
-        
-        /* СПИСОК ЧАТОВ */
         .chats { flex:1; overflow-y:auto; padding:8px; }
         .chat-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; cursor:pointer; }
         .chat-item:hover { background:#2b394a; }
@@ -48,8 +40,6 @@
         .chat-item .last { font-size:12px; color:#708499; }
         .empty { text-align:center; color:#708499; padding:40px 0; }
         .empty span { font-size:40px; display:block; margin-bottom:8px; }
-        
-        /* ОКНО ЧАТА */
         .chat { flex:1; display:flex; flex-direction:column; background:#0e1621; }
         .chat-header { height:56px; padding:0 16px; display:flex; align-items:center; gap:12px; background:#17212b; border-bottom:1px solid #1e2a36; flex-shrink:0; }
         .chat-header .left { display:flex; align-items:center; gap:12px; flex:1; cursor:pointer; }
@@ -60,19 +50,15 @@
         .chat-header .actions { display:flex; gap:8px; }
         .chat-header .actions button { background:none; border:none; color:#708499; font-size:18px; cursor:pointer; }
         .chat-header .actions button:hover { color:#fff; }
-        
-        /* СООБЩЕНИЯ */
         .msgs { flex:1; padding:16px 20px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
-        .msg { max-width:75%; padding:8px 14px; border-radius:16px; font-size:14px; word-wrap:break-word; }
+        .msg { max-width:75%; padding:8px 14px; border-radius:16px; font-size:14px; word-wrap:break-word; margin-bottom:2px; }
         .msg.out { background:#2b5278; align-self:flex-end; border-bottom-right-radius:4px; }
         .msg.in { background:#1a2a3a; align-self:flex-start; border-bottom-left-radius:4px; border:1px solid #2a3a4a; }
         .msg .time { font-size:10px; color:#708499; text-align:right; margin-top:4px; }
-        .sep { text-align:center; color:#708499; font-size:12px; padding:12px 0 8px; }
+        .sep { text-align:center; color:#708499; font-size:12px; padding:12px 0 8px; width:100%; }
         .empty-chat { text-align:center; color:#708499; margin:auto; }
         .empty-chat span { font-size:48px; display:block; margin-bottom:16px; }
         .empty-chat h3 { color:#fff; margin-bottom:8px; }
-        
-        /* ПАНЕЛЬ ВВОДА */
         .input-area { padding:12px 16px; background:#17212b; border-top:1px solid #1e2a36; display:flex; gap:8px; align-items:center; flex-shrink:0; }
         .input-area input { flex:1; padding:8px 16px; border-radius:20px; border:1px solid #1e2a36; background:#0e1621; color:#fff; outline:none; font-size:14px; }
         .input-area input:focus { border-color:#5288c1; }
@@ -80,8 +66,6 @@
         .input-area .send:hover { background:#649ad4; }
         .input-area .btn-icon { background:none; border:none; color:#708499; font-size:20px; cursor:pointer; padding:4px; }
         .input-area .btn-icon:hover { color:#fff; }
-        
-        /* АДМИН-ПАНЕЛЬ */
         #admin-panel { display:none; padding:10px 16px; border-top:1px solid #1e2a36; background:#17212b; }
         #admin-panel h4 { color:#5288c1; font-size:13px; margin-bottom:6px; }
         #admin-panel input { width:100%; padding:6px 10px; border-radius:4px; border:1px solid #1e2a36; background:#0e1621; color:#fff; font-size:12px; margin-bottom:6px; }
@@ -93,8 +77,6 @@
         #admin-panel .row .info { background:#5288c1; color:#fff; }
         #admin-panel .list { max-height:120px; overflow-y:auto; font-size:12px; margin-top:6px; }
         #admin-panel .list div { padding:4px; border-bottom:1px solid #1e2a36; display:flex; justify-content:space-between; }
-        
-        /* ПРОФИЛЬ */
         #profile { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; }
         #profile .modal { background:#17212b; border-radius:16px; padding:32px; max-width:360px; width:90%; position:relative; text-align:center; }
         #profile .modal .close { position:absolute; top:12px; right:16px; font-size:24px; cursor:pointer; color:#708499; }
@@ -106,7 +88,6 @@
         #profile .modal .p-role { font-size:12px; color:#ffd700; }
         #profile .modal .p-btn { margin-top:16px; }
         #profile .modal .p-btn button { background:#5288c1; color:#fff; border:none; padding:8px 20px; border-radius:8px; cursor:pointer; }
-        
         @media (max-width:600px) {
             .sidebar { width:100%; max-height:35vh; }
             .container { flex-direction:column; }
@@ -117,7 +98,6 @@
 </head>
 <body>
 
-<!-- ========== ЭКРАН ВХОДА ========== -->
 <div id="auth">
     <div class="card">
         <h1>🔐 KirmelCrypt</h1>
@@ -127,11 +107,8 @@
     </div>
 </div>
 
-<!-- ========== ПРИЛОЖЕНИЕ ========== -->
 <div id="app">
     <div class="container">
-        
-        <!-- САЙДБАР -->
         <div class="sidebar">
             <div class="sidebar-header">
                 <h2>🔐 KirmelCrypt</h2>
@@ -150,8 +127,6 @@
             <div class="chats" id="chatsList">
                 <div class="empty"><span>💬</span>Нет активных чатов</div>
             </div>
-            
-            <!-- АДМИН-ПАНЕЛЬ -->
             <div id="admin-panel">
                 <h4>👑 Админ-панель</h4>
                 <input type="text" id="adminUserId" placeholder="ID пользователя">
@@ -164,8 +139,6 @@
                 <div class="list" id="adminUsersList"></div>
             </div>
         </div>
-        
-        <!-- ЧАТ -->
         <div class="chat">
             <div class="chat-header" id="chatHeader" style="display:none;">
                 <div class="left" id="chatHeaderClick">
@@ -183,7 +156,6 @@
                     <button id="callBtn">📞</button>
                 </div>
             </div>
-            
             <div class="msgs" id="msgContainer">
                 <div class="empty-chat">
                     <span>🔐</span>
@@ -191,18 +163,15 @@
                     <p>Введите ID друга для начала защищенной сессии</p>
                 </div>
             </div>
-            
             <div class="input-area" id="inputArea" style="display:none;">
                 <button class="btn-icon" id="emojiBtn">😊</button>
                 <input type="text" id="msgInput" placeholder="Напишите сообщение...">
                 <button class="send" id="sendBtn">➤</button>
             </div>
         </div>
-        
     </div>
 </div>
 
-<!-- ========== ПРОФИЛЬ ========== -->
 <div id="profile">
     <div class="modal">
         <div class="close" id="profileClose">✕</div>
@@ -215,7 +184,6 @@
     </div>
 </div>
 
-<!-- ========== JAVASCRIPT ========== -->
 <script>
 // ============================================================
 // FIREBASE
@@ -247,69 +215,29 @@ let loaded = new Set();
 // DOM
 // ============================================================
 const $ = id => document.getElementById(id);
-const loginBtn = $('loginBtn');
-const authError = $('authError');
-const app = $('app');
-const authScreen = $('auth');
-const myAvatar = $('myAvatar');
-const myName = $('myName');
-const myIdDisplay = $('myIdDisplay');
-const peerInput = $('peerInput');
-const connectBtn = $('connectBtn');
-const chatsList = $('chatsList');
-const msgContainer = $('msgContainer');
-const chatHeader = $('chatHeader');
-const chatAvatar = $('chatAvatar');
-const chatName = $('chatName');
-const statusDot = $('statusDot');
-const statusText = $('statusText');
-const inputArea = $('inputArea');
-const msgInput = $('msgInput');
-const sendBtn = $('sendBtn');
-const chatHeaderClick = $('chatHeaderClick');
-const profileBtn = $('profileBtn');
-const callBtn = $('callBtn');
-const emojiBtn = $('emojiBtn');
-
-const adminPanel = $('admin-panel');
-const adminUserId = $('adminUserId');
-const banBtn = $('banBtn');
-const unbanBtn = $('unbanBtn');
-const makeAdminBtn = $('makeAdminBtn');
-const showUsersBtn = $('showUsersBtn');
-const adminUsersList = $('adminUsersList');
-
-const profile = $('profile');
-const profileClose = $('profileClose');
-const pAvatar = $('pAvatar');
-const pName = $('pName');
-const pId = $('pId');
-const pStatus = $('pStatus');
-const pRole = $('pRole');
-const pChatBtn = $('pChatBtn');
 
 // ============================================================
 // 1. ВХОД
 // ============================================================
-loginBtn.onclick = () => {
+$('loginBtn').onclick = () => {
     const provider = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(provider).catch(err => {
-        authError.textContent = err.message;
-        authError.style.display = 'block';
+        $('authError').textContent = err.message;
+        $('authError').style.display = 'block';
     });
 };
 
 auth.onAuthStateChanged(user => {
     if (user) {
         currentUser = user;
-        authScreen.style.display = 'none';
-        app.style.display = 'block';
+        $('auth').style.display = 'none';
+        $('app').style.display = 'block';
         
         myId = user.uid;
-        myAvatar.src = user.photoURL || '';
-        myName.textContent = user.displayName || 'Аноним';
-        myIdDisplay.textContent = `ID: ${myId.substring(0,12)} (клик)`;
-        myIdDisplay.onclick = () => {
+        $('myAvatar').src = user.photoURL || '';
+        $('myName').textContent = user.displayName || 'Аноним';
+        $('myIdDisplay').textContent = `ID: ${myId.substring(0,12)} (клик)`;
+        $('myIdDisplay').onclick = () => {
             navigator.clipboard.writeText(myId.substring(0,12));
             alert('✅ ID скопирован!');
         };
@@ -324,64 +252,19 @@ auth.onAuthStateChanged(user => {
         listenMessages();
         checkAdmin();
     } else {
-        authScreen.style.display = 'flex';
-        app.style.display = 'none';
+        $('auth').style.display = 'flex';
+        $('app').style.display = 'none';
     }
 });
 
 // ============================================================
-// 2. СООБЩЕНИЯ
+// 2. ПОКАЗ СООБЩЕНИЙ (ПРЯМОЙ РЕНДЕРИНГ)
 // ============================================================
-function showMsg(text, who, time) {
-    const date = new Date(time || Date.now());
-    const dateStr = date.toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
-    const timeStr = date.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
+function renderMessages(peerId) {
+    const container = $('msgContainer');
+    if (!container) return;
     
-    const key = text + time + who;
-    if (loaded.has(key)) return;
-    loaded.add(key);
-    
-    const separators = msgContainer.querySelectorAll('.sep');
-    let last = separators[separators.length-1];
-    if (!last || last.textContent !== dateStr) {
-        const s = document.createElement('div');
-        s.className = 'sep';
-        s.textContent = dateStr;
-        msgContainer.appendChild(s);
-    }
-    
-    const div = document.createElement('div');
-    div.className = 'msg ' + who;
-    div.innerHTML = `<div>${text}</div><div class="time">${timeStr}</div>`;
-    msgContainer.appendChild(div);
-    msgContainer.scrollTop = msgContainer.scrollHeight;
-}
-
-// ============================================================
-// 3. СЛУШАТЕЛЬ
-// ============================================================
-function listenMessages() {
-    db.ref('messages/' + myId).on('child_added', snap => {
-        const data = snap.val();
-        if (!data || !data.text || data.from === myId) return;
-        
-        if (chatWith && chatWith === snap.key) {
-            showMsg(data.text, 'in', data.timestamp);
-            updateLast(snap.key, data.text);
-        }
-        
-        db.ref('users/' + snap.key).once('value', s => {
-            const u = s.val();
-            if (u) saveChat(snap.key, u.name, u.avatar);
-        });
-    });
-}
-
-// ============================================================
-// 4. ИСТОРИЯ
-// ============================================================
-function loadHistory(peerId) {
-    msgContainer.innerHTML = '';
+    container.innerHTML = '';
     loaded.clear();
     chatWith = peerId;
     
@@ -389,24 +272,87 @@ function loadHistory(peerId) {
         const data = snap.val();
         if (data) {
             const msgs = Object.values(data).sort((a,b) => (a.timestamp||0) - (b.timestamp||0));
+            let lastDate = '';
             msgs.forEach(m => {
                 if (m && m.text) {
-                    showMsg(m.text, m.from === myId ? 'out' : 'in', m.timestamp);
+                    const date = new Date(m.timestamp || Date.now());
+                    const dateStr = date.toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
+                    if (dateStr !== lastDate) {
+                        const sep = document.createElement('div');
+                        sep.className = 'sep';
+                        sep.textContent = dateStr;
+                        container.appendChild(sep);
+                        lastDate = dateStr;
+                    }
+                    const div = document.createElement('div');
+                    div.className = 'msg ' + (m.from === myId ? 'out' : 'in');
+                    const timeStr = date.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
+                    div.innerHTML = `<div>${m.text}</div><div class="time">${timeStr}</div>`;
+                    container.appendChild(div);
                 }
             });
+            container.scrollTop = container.scrollHeight;
+            console.log('📚 Показано ' + msgs.length + ' сообщений');
         }
     });
 }
 
 // ============================================================
-// 5. ЧАТЫ
+// 3. СЛУШАТЕЛЬ НОВЫХ СООБЩЕНИЙ
+// ============================================================
+function listenMessages() {
+    db.ref('messages/' + myId).on('child_added', snap => {
+        const data = snap.val();
+        const fromId = snap.key;
+        if (!data || !data.text || data.from === myId) return;
+        
+        console.log('📩 Новое сообщение от:', fromId, 'текст:', data.text);
+        
+        // Если чат открыт с этим человеком - показываем
+        if (chatWith && chatWith === fromId) {
+            const container = $('msgContainer');
+            if (!container) return;
+            
+            // Проверяем последний разделитель
+            const date = new Date(data.timestamp || Date.now());
+            const dateStr = date.toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
+            const separators = container.querySelectorAll('.sep');
+            let lastSep = separators[separators.length-1];
+            if (!lastSep || lastSep.textContent !== dateStr) {
+                const sep = document.createElement('div');
+                sep.className = 'sep';
+                sep.textContent = dateStr;
+                container.appendChild(sep);
+            }
+            
+            const div = document.createElement('div');
+            div.className = 'msg in';
+            const timeStr = date.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
+            div.innerHTML = `<div>${data.text}</div><div class="time">${timeStr}</div>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            
+            updateLast(fromId, data.text);
+        }
+        
+        // Сохраняем чат
+        db.ref('users/' + fromId).once('value', s => {
+            const u = s.val();
+            if (u) saveChat(fromId, u.name, u.avatar);
+        });
+    });
+}
+
+// ============================================================
+// 4. ЧАТЫ
 // ============================================================
 function loadChats() {
     db.ref('chats/' + myId).on('value', snap => {
         const data = snap.val();
-        chatsList.innerHTML = '';
+        const list = $('chatsList');
+        list.innerHTML = '';
         if (!data) {
-            chatsList.innerHTML = '<div class="empty"><span>💬</span>Нет активных чатов</div>';
+            list.innerHTML = '<div class="empty"><span>💬</span>Нет активных чатов</div>';
             return;
         }
         const arr = Object.values(data).sort((a,b) => (b.timestamp||0) - (a.timestamp||0));
@@ -423,7 +369,7 @@ function loadChats() {
                 </div>
             `;
             div.onclick = () => openChat(chat.peerId);
-            chatsList.appendChild(div);
+            list.appendChild(div);
         });
     });
 }
@@ -446,24 +392,24 @@ function updateLast(peerId, text) {
 }
 
 // ============================================================
-// 6. ОТКРЫТЬ ЧАТ
+// 5. ОТКРЫТЬ ЧАТ
 // ============================================================
 function openChat(peerId) {
     chatWith = peerId;
-    peerInput.value = peerId;
-    chatHeader.style.display = 'flex';
-    inputArea.style.display = 'flex';
-    chatName.textContent = 'Загрузка...';
-    chatAvatar.src = '';
+    $('peerInput').value = peerId;
+    $('chatHeader').style.display = 'flex';
+    $('inputArea').style.display = 'flex';
+    $('chatName').textContent = 'Загрузка...';
+    $('chatAvatar').src = '';
     
-    const empty = msgContainer.querySelector('.empty-chat');
+    const empty = document.querySelector('.empty-chat');
     if (empty) empty.style.display = 'none';
     
     db.ref('users/' + peerId).once('value', snap => {
         const user = snap.val();
         if (user) {
-            chatName.textContent = user.name || 'Собеседник';
-            chatAvatar.src = user.avatar || '';
+            $('chatName').textContent = user.name || 'Собеседник';
+            $('chatAvatar').src = user.avatar || '';
         }
     });
     
@@ -471,17 +417,18 @@ function openChat(peerId) {
     const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
     if (item) item.classList.add('active');
     
-    statusDot.className = 'dot on';
-    statusText.textContent = 'Онлайн ✅';
+    $('statusDot').className = 'dot on';
+    $('statusText').textContent = 'Онлайн ✅';
     
-    loadHistory(peerId);
+    // ЗАГРУЖАЕМ СООБЩЕНИЯ
+    renderMessages(peerId);
 }
 
 // ============================================================
-// 7. ПОДКЛЮЧИТЬСЯ
+// 6. ПОДКЛЮЧИТЬСЯ
 // ============================================================
-connectBtn.onclick = async () => {
-    const target = peerInput.value.trim();
+$('connectBtn').onclick = async () => {
+    const target = $('peerInput').value.trim();
     if (!target) return alert('Введите ID');
     if (target === myId) return alert('Нельзя к себе');
     
@@ -494,10 +441,10 @@ connectBtn.onclick = async () => {
 };
 
 // ============================================================
-// 8. ОТПРАВИТЬ
+// 7. ОТПРАВИТЬ
 // ============================================================
-sendBtn.onclick = () => {
-    const text = msgInput.value.trim();
+$('sendBtn').onclick = () => {
+    const text = $('msgInput').value.trim();
     if (!text) return alert('Введите сообщение');
     if (!chatWith) return alert('Нет собеседника');
     
@@ -509,54 +456,71 @@ sendBtn.onclick = () => {
         from: myId, text, name: currentUser.displayName, timestamp: ts
     });
     
-    showMsg(text, 'out', ts);
+    // Показываем сразу
+    const container = $('msgContainer');
+    const date = new Date(ts);
+    const dateStr = date.toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
+    const separators = container.querySelectorAll('.sep');
+    let lastSep = separators[separators.length-1];
+    if (!lastSep || lastSep.textContent !== dateStr) {
+        const sep = document.createElement('div');
+        sep.className = 'sep';
+        sep.textContent = dateStr;
+        container.appendChild(sep);
+    }
+    const div = document.createElement('div');
+    div.className = 'msg out';
+    const timeStr = date.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
+    div.innerHTML = `<div>${text}</div><div class="time">${timeStr}</div>`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    
     updateLast(chatWith, text);
-    msgInput.value = '';
+    $('msgInput').value = '';
 };
 
-msgInput.onkeydown = e => {
-    if (e.key === 'Enter') sendBtn.click();
+$('msgInput').onkeydown = e => {
+    if (e.key === 'Enter') $('sendBtn').click();
 };
 
 // ============================================================
-// 9. ЭМОДЗИ
+// 8. ЭМОДЗИ
 // ============================================================
-emojiBtn.onclick = () => {
+$('emojiBtn').onclick = () => {
     const emojis = ['😊','😂','❤️','🔥','👍','👋','🎉','✨','💪','🤝'];
-    msgInput.value += emojis[Math.floor(Math.random() * emojis.length)];
-    msgInput.focus();
+    $('msgInput').value += emojis[Math.floor(Math.random() * emojis.length)];
+    $('msgInput').focus();
 };
 
 // ============================================================
-// 10. ПРОФИЛЬ
+// 9. ПРОФИЛЬ
 // ============================================================
 function showProfile(userId) {
     db.ref('users/' + userId).once('value', async snap => {
         const user = snap.val();
         if (!user) return;
-        pAvatar.src = user.avatar || '';
-        pName.textContent = user.name || 'Без имени';
-        pId.textContent = 'ID: ' + userId.substring(0,12);
-        pStatus.textContent = user.online ? '🟢 Онлайн' : '⚫ Офлайн';
+        $('pAvatar').src = user.avatar || '';
+        $('pName').textContent = user.name || 'Без имени';
+        $('pId').textContent = 'ID: ' + userId.substring(0,12);
+        $('pStatus').textContent = user.online ? '🟢 Онлайн' : '⚫ Офлайн';
         const role = await getUserRole(userId);
-        pRole.textContent = role === 'creator' ? '👑 Создатель' : role === 'admin' ? '⭐ Админ' : 'Пользователь';
-        profile.style.display = 'flex';
+        $('pRole').textContent = role === 'creator' ? '👑 Создатель' : role === 'admin' ? '⭐ Админ' : 'Пользователь';
+        $('profile').style.display = 'flex';
     });
 }
 
-chatHeaderClick.onclick = () => { if (chatWith) showProfile(chatWith); };
-profileBtn.onclick = () => { if (chatWith) showProfile(chatWith); };
-profileClose.onclick = () => profile.style.display = 'none';
-profile.onclick = e => { if (e.target === e.currentTarget) profile.style.display = 'none'; };
-pChatBtn.onclick = () => {
-    profile.style.display = 'none';
+$('chatHeaderClick').onclick = () => { if (chatWith) showProfile(chatWith); };
+$('profileBtn').onclick = () => { if (chatWith) showProfile(chatWith); };
+$('profileClose').onclick = () => $('profile').style.display = 'none';
+$('profile').onclick = e => { if (e.target === e.currentTarget) $('profile').style.display = 'none'; };
+$('pChatBtn').onclick = () => {
+    $('profile').style.display = 'none';
     if (chatWith) openChat(chatWith);
 };
-
-callBtn.onclick = () => alert('📞 Функция звонков в разработке!');
+$('callBtn').onclick = () => alert('📞 Функция звонков в разработке!');
 
 // ============================================================
-// 11. РОЛИ
+// 10. РОЛИ
 // ============================================================
 async function checkAdmin() {
     const c = await db.ref('creator').once('value');
@@ -565,7 +529,7 @@ async function checkAdmin() {
         const a = await db.ref('admins/' + myId).once('value');
         if (a.exists()) isAdmin = true;
     }
-    if (isAdmin || isCreator) adminPanel.style.display = 'block';
+    if (isAdmin || isCreator) $('admin-panel').style.display = 'block';
 }
 
 async function getUserRole(userId) {
@@ -581,24 +545,22 @@ async function isBanned(userId) {
     return s.exists();
 }
 
-banBtn.onclick = async () => {
-    const id = adminUserId.value.trim();
+$('banBtn').onclick = async () => {
+    const id = $('adminUserId').value.trim();
     if (!id) return alert('Введите ID');
     if (!isAdmin && !isCreator) return alert('Нет прав');
     await db.ref('banned/' + id).set({ bannedAt: Date.now(), reason: 'Нарушение', bannedBy: myId });
     alert('✅ Забанен');
 };
-
-unbanBtn.onclick = async () => {
-    const id = adminUserId.value.trim();
+$('unbanBtn').onclick = async () => {
+    const id = $('adminUserId').value.trim();
     if (!id) return alert('Введите ID');
     if (!isAdmin && !isCreator) return alert('Нет прав');
     await db.ref('banned/' + id).remove();
     alert('✅ Разбанен');
 };
-
-makeAdminBtn.onclick = async () => {
-    const id = adminUserId.value.trim();
+$('makeAdminBtn').onclick = async () => {
+    const id = $('adminUserId').value.trim();
     if (!id) return alert('Введите ID');
     if (!isCreator) return alert('Только создатель');
     const snap = await db.ref('users/' + id).once('value');
@@ -606,8 +568,7 @@ makeAdminBtn.onclick = async () => {
     await db.ref('admins/' + id).set({ role: 'admin', name: snap.val().name, addedAt: Date.now() });
     alert('✅ Админ назначен');
 };
-
-showUsersBtn.onclick = async () => {
+$('showUsersBtn').onclick = async () => {
     if (!isAdmin && !isCreator) return alert('Нет прав');
     const snap = await db.ref('users').once('value');
     const users = snap.val();
@@ -616,7 +577,7 @@ showUsersBtn.onclick = async () => {
         const banned = await isBanned(id);
         html += `<div><span>${user.name || 'Без имени'}</span><span>${banned ? '🚫' : '✅'}</span></div>`;
     }
-    adminUsersList.innerHTML = html || '<div style="color:#708499;">Нет пользователей</div>';
+    $('adminUsersList').innerHTML = html || '<div style="color:#708499;">Нет пользователей</div>';
 };
 
 console.log('✅ KirmelCrypt загружен!');
