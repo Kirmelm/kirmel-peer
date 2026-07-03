@@ -8,14 +8,12 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
-        *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+        *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,sans-serif}
         body{background:#0a0a0a;color:#fff;height:100vh;display:flex;flex-direction:column}
         #auth{display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a0a}
         .card{background:#1f1f1f;padding:40px;border-radius:16px;max-width:360px;width:90%;text-align:center}
-        .card h1{color:#5288c1;margin-bottom:8px}
-        .card p{color:#888;margin-bottom:24px}
+        .card h1{color:#5288c1}
         .card button{background:#5288c1;color:#fff;border:none;padding:12px;border-radius:8px;width:100%;font-size:16px;cursor:pointer}
-        .card button:hover{background:#6a9fd8}
         .err{color:#e74c3c;margin-top:12px;display:none}
         #app{display:none;height:100vh;flex-direction:column}
         .top{background:#1f1f1f;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #333}
@@ -23,7 +21,6 @@
         .top .avatar{width:36px;height:36px;border-radius:50%;background:#333}
         .top .name{font-weight:600}
         .top .id{font-size:12px;color:#888;cursor:pointer}
-        .top .logout{color:#888;cursor:pointer}
         .mid{display:flex;flex:1;overflow:hidden}
         .sidebar{width:280px;background:#141414;border-right:1px solid #333;display:flex;flex-direction:column;flex-shrink:0}
         .sidebar .find{padding:12px;display:flex;gap:6px}
@@ -49,11 +46,8 @@
         .chat .bottom{padding:12px;background:#1f1f1f;display:flex;gap:8px;border-top:1px solid #333}
         .chat .bottom input{flex:1;padding:10px 16px;border-radius:20px;border:none;background:#0a0a0a;color:#fff;outline:none}
         .chat .bottom button{background:#5288c1;border:none;border-radius:50%;width:40px;height:40px;color:#fff;font-size:18px;cursor:pointer}
-        .chat .bottom button:hover{background:#6a9fd8}
-        .empty-chat{text-align:center;color:#888;margin:auto}
-        .empty-chat span{font-size:48px;display:block;margin-bottom:16px}
         .admin-panel{display:none;padding:12px;background:#141414;border-top:1px solid #333}
-        .admin-panel h4{color:#5288c1;font-size:13px;margin-bottom:6px}
+        .admin-panel h4{color:#5288c1;font-size:13px}
         .admin-panel input{width:100%;padding:6px 10px;border-radius:4px;border:none;background:#1f1f1f;color:#fff;margin-bottom:6px}
         .admin-panel .row{display:flex;gap:6px;flex-wrap:wrap}
         .admin-panel .row button{padding:4px 10px;border:none;border-radius:4px;font-size:11px;cursor:pointer}
@@ -66,7 +60,6 @@
         .profile-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center}
         .profile-modal .modal{background:#1f1f1f;border-radius:16px;padding:32px;max-width:360px;width:90%;position:relative;text-align:center}
         .profile-modal .modal .close{position:absolute;top:12px;right:16px;font-size:24px;cursor:pointer;color:#888}
-        .profile-modal .modal .close:hover{color:#fff}
         .profile-modal .modal img{width:80px;height:80px;border-radius:50%;object-fit:cover;margin-bottom:12px}
         .profile-modal .modal .p-name{font-size:20px;font-weight:700}
         .profile-modal .modal .p-id{font-size:13px;color:#888}
@@ -74,6 +67,8 @@
         .profile-modal .modal .p-role{font-size:12px;color:#ffd700}
         .profile-modal .modal .p-btn{margin-top:16px}
         .profile-modal .modal .p-btn button{background:#5288c1;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer}
+        /* Лог */
+        #log{background:#1f1f1f;padding:8px 12px;border-top:1px solid #333;font-size:12px;color:#888;max-height:80px;overflow-y:auto;white-space:pre-wrap;font-family:monospace}
         @media(max-width:600px){.sidebar{width:100%;max-height:35vh}.mid{flex-direction:column}.chat{height:65vh}}
     </style>
 </head>
@@ -99,7 +94,9 @@
                 <div class="id" id="myIdDisplay">ID: ...</div>
             </div>
         </div>
-        <div class="logout" id="logoutBtn">🚪</div>
+        <div style="display:flex;gap:12px;">
+            <span class="id" id="logoutBtn" style="cursor:pointer;">🚪</span>
+        </div>
     </div>
     <div class="mid">
         <div class="sidebar">
@@ -134,8 +131,8 @@
                 </div>
             </div>
             <div class="msgs" id="msgContainer">
-                <div class="empty-chat">
-                    <span>🔐</span>
+                <div class="empty-chat" style="text-align:center;color:#888;margin:auto;">
+                    <span style="font-size:48px;display:block;margin-bottom:16px;">🔐</span>
                     <h3>Безопасный чат</h3>
                     <p>Введите ID друга для начала</p>
                 </div>
@@ -143,9 +140,11 @@
             <div class="bottom" id="inputArea" style="display:none;">
                 <input type="text" id="msgInput" placeholder="Напишите сообщение...">
                 <button id="sendBtn">➤</button>
+                <button id="debugBtn" style="background:#555;border:none;border-radius:50%;width:40px;height:40px;color:#fff;font-size:14px;cursor:pointer;">📋</button>
             </div>
         </div>
     </div>
+    <div id="log">📋 Лог: Ожидание действий...</div>
 </div>
 
 <!-- ПРОФИЛЬ -->
@@ -162,6 +161,18 @@
 </div>
 
 <script>
+// ============================================================
+// ЛОГ
+// ============================================================
+function log(msg) {
+    const el = document.getElementById('log');
+    if (el) {
+        el.textContent += '\n' + new Date().toLocaleTimeString() + ' ' + msg;
+        el.scrollTop = el.scrollHeight;
+    }
+    console.log(msg);
+}
+
 // ============================================================
 // FIREBASE
 // ============================================================
@@ -197,15 +208,18 @@ const $ = id => document.getElementById(id);
 // 1. ВХОД
 // ============================================================
 $('loginBtn').onclick = () => {
+    log('Нажата кнопка входа');
     const provider = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(provider).catch(err => {
         $('authError').textContent = err.message;
         $('authError').style.display = 'block';
+        log('Ошибка входа: ' + err.message);
     });
 };
 
 auth.onAuthStateChanged(user => {
     if (user) {
+        log('Пользователь авторизован: ' + user.displayName);
         currentUser = user;
         $('auth').style.display = 'none';
         $('app').style.display = 'flex';
@@ -217,18 +231,21 @@ auth.onAuthStateChanged(user => {
         $('myIdDisplay').onclick = () => {
             navigator.clipboard.writeText(myId.substring(0,12));
             alert('✅ ID скопирован!');
+            log('ID скопирован');
         };
         
         db.ref('users/' + myId).set({
             name: user.displayName,
             avatar: user.photoURL,
             online: true
-        });
+        }).then(() => log('Пользователь сохранен в Firebase'));
         
         loadChats();
         listenMessages();
         checkAdmin();
+        log('Готово, слушаем сообщения');
     } else {
+        log('Пользователь не авторизован');
         $('auth').style.display = 'flex';
         $('app').style.display = 'none';
     }
@@ -243,17 +260,21 @@ $('logoutBtn').onclick = () => {
 };
 
 // ============================================================
-// 3. ПОКАЗ СООБЩЕНИЙ (ОСНОВНАЯ ФУНКЦИЯ)
+// 3. ПОКАЗ СООБЩЕНИЙ
 // ============================================================
 function renderMessages(peerId) {
+    log('renderMessages для ' + peerId);
     const container = $('msgContainer');
-    if (!container) return;
+    if (!container) { log('Ошибка: контейнер сообщений не найден'); return; }
     container.innerHTML = '';
     loaded.clear();
     chatWith = peerId;
     
-    db.ref('messages/' + myId + '/' + peerId).once('value', snap => {
+    const path = 'messages/' + myId + '/' + peerId;
+    log('Читаем путь: ' + path);
+    db.ref(path).once('value', snap => {
         const data = snap.val();
+        log('Получены данные: ' + (data ? Object.keys(data).length + ' записей' : 'нет данных'));
         if (data) {
             const msgs = Object.values(data).sort((a,b) => (a.timestamp||0) - (b.timestamp||0));
             let lastDate = '';
@@ -276,23 +297,27 @@ function renderMessages(peerId) {
                 }
             });
             container.scrollTop = container.scrollHeight;
-            console.log('📚 Загружено ' + msgs.length + ' сообщений');
+            log('Загружено ' + msgs.length + ' сообщений');
         } else {
-            console.log('📭 Нет сообщений');
+            log('Нет сообщений в этом чате');
+            // Показываем пустое состояние
+            container.innerHTML = '<div style="text-align:center;color:#888;margin:auto;"><span style="font-size:48px;display:block;margin-bottom:16px;">🔐</span><h3>Нет сообщений</h3><p>Напишите первое сообщение</p></div>';
         }
+    }).catch(err => {
+        log('Ошибка чтения: ' + err.message);
     });
 }
 
 // ============================================================
-// 4. СЛУШАТЕЛЬ НОВЫХ СООБЩЕНИЙ (В РЕАЛЬНОМ ВРЕМЕНИ)
+// 4. СЛУШАТЕЛЬ НОВЫХ СООБЩЕНИЙ
 // ============================================================
 function listenMessages() {
+    log('Запуск слушателя для ' + myId);
     db.ref('messages/' + myId).on('child_added', snap => {
         const data = snap.val();
         const fromId = snap.key;
         if (!data || !data.text || data.from === myId) return;
-        
-        console.log('📩 Новое от:', fromId, data.text);
+        log('Новое сообщение от ' + fromId + ': ' + data.text);
         
         if (chatWith && chatWith === fromId) {
             const container = $('msgContainer');
@@ -377,6 +402,7 @@ function updateLast(peerId, text) {
 // 6. ОТКРЫТЬ ЧАТ
 // ============================================================
 function openChat(peerId) {
+    log('openChat ' + peerId);
     chatWith = peerId;
     $('peerInput').value = peerId;
     $('chatHead').style.display = 'flex';
@@ -410,9 +436,10 @@ $('connectBtn').onclick = async () => {
     const target = $('peerInput').value.trim();
     if (!target) return alert('Введите ID');
     if (target === myId) return alert('Нельзя к себе');
+    log('Подключение к ' + target);
     
     const snap = await db.ref('users/' + target).once('value');
-    if (!snap.exists()) return alert('Пользователь не найден');
+    if (!snap.exists()) { alert('Пользователь не найден'); log('Пользователь не найден'); return; }
     
     const user = snap.val();
     saveChat(target, user.name, user.avatar);
@@ -426,6 +453,7 @@ $('sendBtn').onclick = () => {
     const text = $('msgInput').value.trim();
     if (!text) return alert('Введите сообщение');
     if (!chatWith) return alert('Нет собеседника');
+    log('Отправка: ' + text);
     
     const ts = Date.now();
     db.ref('messages/' + chatWith + '/' + myId).push().set({
@@ -435,7 +463,7 @@ $('sendBtn').onclick = () => {
         from: myId, text, name: currentUser.displayName, timestamp: ts
     });
     
-    // Показываем сразу (рендерим)
+    // Показываем сразу
     const container = $('msgContainer');
     const date = new Date(ts);
     const dateStr = date.toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
@@ -463,7 +491,19 @@ $('msgInput').onkeydown = e => {
 };
 
 // ============================================================
-// 9. ПРОФИЛЬ
+// 9. ДЕБАГ - ПРИНУДИТЕЛЬНАЯ ЗАГРУЗКА
+// ============================================================
+$('debugBtn').onclick = () => {
+    if (!chatWith) {
+        alert('Сначала откройте чат');
+        return;
+    }
+    log('Принудительная загрузка сообщений для ' + chatWith);
+    renderMessages(chatWith);
+};
+
+// ============================================================
+// 10. ПРОФИЛЬ
 // ============================================================
 function showProfile(userId) {
     db.ref('users/' + userId).once('value', async snap => {
@@ -488,7 +528,7 @@ $('pChatBtn').onclick = () => {
 };
 
 // ============================================================
-// 10. РОЛИ
+// 11. РОЛИ
 // ============================================================
 async function checkAdmin() {
     const c = await db.ref('creator').once('value');
@@ -548,7 +588,7 @@ $('showUsersBtn').onclick = async () => {
     $('adminUsersList').innerHTML = html || '<div style="color:#888;">Нет пользователей</div>';
 };
 
-console.log('✅ KirmelChat загружен!');
+log('✅ KirmelChat загружен!');
 </script>
 </body>
 </html>
