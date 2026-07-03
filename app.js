@@ -155,13 +155,22 @@ async function decryptMessage(encryptedObj, key) {
     }
 }
 
-// --- P2P СОЕДИНЕНИЕ ---
+// --- P2P СОЕДИНЕНИЕ (ИСПРАВЛЕНО) ---
 
 async function initPeer() {
     myKeyPair = await generateKeyPair();
-    peer = new Peer();
+    
+    // ИСПРАВЛЕНО: Используем публичный сервер PeerJS
+    peer = new Peer(undefined, {
+        host: '0.peerjs.com',  // Альтернативный сервер
+        port: 443,
+        path: '/',
+        secure: true,
+        debug: 2  // Включаем отладку
+    });
 
     peer.on('open', (id) => {
+        console.log('PeerJS подключен! ID:', id);
         myIdDisplay.innerText = `Ваш ID: ${id} (клик для копирования)`;
         myIdDisplay.onclick = () => {
             navigator.clipboard.writeText(id);
@@ -170,6 +179,7 @@ async function initPeer() {
     });
 
     peer.on('connection', (conn) => {
+        console.log('Входящее соединение от:', conn.peer);
         if (activeConnection) {
             conn.close(); 
             return;
@@ -179,6 +189,20 @@ async function initPeer() {
 
     peer.on('error', (err) => {
         console.error('PeerJS ошибка:', err);
+        // Показываем ошибку пользователю
+        if (err.type === 'unavailable-id') {
+            alert('Ошибка: ID уже используется. Попробуйте перезагрузить страницу.');
+        } else if (err.type === 'peer-unavailable') {
+            alert('Собеседник не найден. Проверьте правильность ID.');
+        } else {
+            alert('Ошибка соединения: ' + err.message);
+        }
+    });
+
+    peer.on('disconnected', () => {
+        console.log('PeerJS отключен');
+        // Пытаемся переподключиться
+        peer.reconnect();
     });
 }
 
@@ -193,7 +217,10 @@ btnConnect.addEventListener('click', () => {
         return;
     }
 
-    const conn = peer.connect(peerId);
+    console.log('Подключаемся к:', peerId);
+    const conn = peer.connect(peerId, {
+        reliable: true
+    });
     setupConnection(conn);
 });
 
@@ -201,6 +228,7 @@ async function setupConnection(conn) {
     activeConnection = conn;
 
     conn.on('open', async () => {
+        console.log('Соединение открыто с:', conn.peer);
         const rawPubKey = await exportPublicKey(myKeyPair.publicKey);
         
         conn.send({
@@ -212,6 +240,8 @@ async function setupConnection(conn) {
     });
 
     conn.on('data', async (data) => {
+        console.log('Получены данные от:', conn.peer, 'тип:', data.type);
+        
         if (data.type === 'HANDSHAKE') {
             activeChat = {
                 id: conn.peer,
@@ -223,6 +253,15 @@ async function setupConnection(conn) {
             sharedSecretKey = await deriveSharedKey(myKeyPair.privateKey, peerPublicKey);
 
             renderChatLayout();
+            
+            // Отправляем ответный handshake
+            const rawPubKey = await exportPublicKey(myKeyPair.publicKey);
+            conn.send({
+                type: 'HANDSHAKE',
+                name: currentUser.displayName,
+                avatar: currentUser.photoURL,
+                publicKey: rawPubKey
+            });
         } 
         else if (data.type === 'MESSAGE') {
             const decryptedText = await decryptMessage(data.encrypted, sharedSecretKey);
@@ -231,12 +270,14 @@ async function setupConnection(conn) {
     });
 
     conn.on('close', () => {
+        console.log('Соединение закрыто');
         alert("Соединение закрыто");
         resetChat();
     });
 
     conn.on('error', (err) => {
         console.error('Ошибка соединения:', err);
+        alert('Ошибка соединения: ' + err.message);
         resetChat();
     });
 }
@@ -264,7 +305,18 @@ function renderChatLayout() {
 
 async function handleSendMessage() {
     const text = messageInput.value.trim();
-    if (!text || !activeConnection || !sharedSecretKey) return;
+    if (!text) {
+        alert('Введите сообщение');
+        return;
+    }
+    if (!activeConnection) {
+        alert('Нет активного соединения');
+        return;
+    }
+    if (!sharedSecretKey) {
+        alert('Ключ шифрования не установлен');
+        return;
+    }
 
     const encryptedData = await encryptMessage(text, sharedSecretKey);
 
@@ -304,7 +356,8 @@ function resetChat() {
     chatsList.innerHTML = '';
     activeChatHeader.style.display = 'none';
     inputArea.style.display = 'none';
-    messagesContainer.innerHTML = `<div class="system-info">Соединение разорвано</div>`;
+    systemPlaceholder.style.display = 'block';
+    messagesContainer.innerHTML = `<div class="system-info" id="system-placeholder">Соединение разорвано</div>`;
 }
 
 function escapeHTML(str) {
@@ -312,3 +365,6 @@ function escapeHTML(str) {
     div.textContent = str;
     return div.innerHTML;
 }
+
+// Дополнительно: обработка ошибок для кнопки логина
+console.log('App.js загружен успешно!');
