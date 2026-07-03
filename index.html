@@ -3,179 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KirmelCrypt</title>
+    <title>KirmelChat</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; font-family:system-ui,sans-serif; }
-        body { background:#0e1621; color:#fff; overflow:hidden; height:100vh; }
-        #auth { display:flex; align-items:center; justify-content:center; height:100vh; background:#0e1621; }
-        #auth .card { background:#17212b; padding:40px; border-radius:12px; max-width:380px; width:90%; text-align:center; }
-        #auth .card h1 { color:#5288c1; margin-bottom:8px; }
-        #auth .card p { color:#708499; margin-bottom:24px; }
-        #auth .card button { background:#5288c1; color:#fff; border:none; padding:12px; border-radius:8px; width:100%; font-size:16px; cursor:pointer; }
-        #auth .card button:hover { background:#649ad4; }
-        #auth .card .err { color:#e74c3c; margin-top:12px; display:none; }
-        #app { display:none; height:100vh; }
-        .container { display:flex; height:100%; }
-        .sidebar { width:300px; background:#17212b; border-right:1px solid #1e2a36; display:flex; flex-direction:column; flex-shrink:0; }
-        .sidebar-header { padding:16px; border-bottom:1px solid #1e2a36; }
-        .sidebar-header h2 { color:#5288c1; font-size:18px; }
-        .user-row { display:flex; align-items:center; gap:10px; margin:12px 0; }
-        .avatar { width:40px; height:40px; border-radius:50%; object-fit:cover; background:#2b394a; }
-        .user-name { font-weight:600; }
-        .user-id { font-size:12px; color:#708499; cursor:pointer; }
-        .connect-row { display:flex; gap:6px; margin-top:8px; }
-        .connect-row input { flex:1; padding:8px 12px; border-radius:8px; border:1px solid #1e2a36; background:#0e1621; color:#fff; outline:none; font-size:14px; }
-        .connect-row input:focus { border-color:#5288c1; }
-        .connect-row button { width:40px; background:#5288c1; border:none; border-radius:8px; color:#fff; font-size:20px; cursor:pointer; }
-        .connect-row button:hover { background:#649ad4; }
-        .chats { flex:1; overflow-y:auto; padding:8px; }
-        .chat-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; cursor:pointer; }
-        .chat-item:hover { background:#2b394a; }
-        .chat-item.active { background:#2b394a; }
-        .chat-item .info { flex:1; overflow:hidden; }
-        .chat-item .name { font-weight:600; font-size:14px; }
-        .chat-item .last { font-size:12px; color:#708499; }
-        .empty { text-align:center; color:#708499; padding:40px 0; }
-        .empty span { font-size:40px; display:block; margin-bottom:8px; }
-        .chat { flex:1; display:flex; flex-direction:column; background:#0e1621; }
-        .chat-header { height:56px; padding:0 16px; display:flex; align-items:center; gap:12px; background:#17212b; border-bottom:1px solid #1e2a36; flex-shrink:0; }
-        .chat-header .left { display:flex; align-items:center; gap:12px; flex:1; cursor:pointer; }
-        .chat-header .status { font-size:12px; color:#708499; }
-        .chat-header .status .dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:4px; }
-        .chat-header .status .dot.on { background:#4cd964; }
-        .chat-header .status .dot.off { background:#708499; }
-        .chat-header .actions { display:flex; gap:8px; }
-        .chat-header .actions button { background:none; border:none; color:#708499; font-size:18px; cursor:pointer; }
-        .chat-header .actions button:hover { color:#fff; }
-        .msgs { flex:1; padding:16px 20px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
-        .msg { max-width:75%; padding:8px 14px; border-radius:16px; font-size:14px; word-wrap:break-word; margin-bottom:2px; }
-        .msg.out { background:#2b5278; align-self:flex-end; border-bottom-right-radius:4px; }
-        .msg.in { background:#1a2a3a; align-self:flex-start; border-bottom-left-radius:4px; border:1px solid #2a3a4a; }
-        .msg .time { font-size:10px; color:#708499; text-align:right; margin-top:4px; }
-        .sep { text-align:center; color:#708499; font-size:12px; padding:12px 0 8px; width:100%; }
-        .empty-chat { text-align:center; color:#708499; margin:auto; }
-        .empty-chat span { font-size:48px; display:block; margin-bottom:16px; }
-        .empty-chat h3 { color:#fff; margin-bottom:8px; }
-        .input-area { padding:12px 16px; background:#17212b; border-top:1px solid #1e2a36; display:flex; gap:8px; align-items:center; flex-shrink:0; }
-        .input-area input { flex:1; padding:8px 16px; border-radius:20px; border:1px solid #1e2a36; background:#0e1621; color:#fff; outline:none; font-size:14px; }
-        .input-area input:focus { border-color:#5288c1; }
-        .input-area .send { width:40px; height:40px; border-radius:50%; background:#5288c1; border:none; color:#fff; font-size:18px; cursor:pointer; flex-shrink:0; }
-        .input-area .send:hover { background:#649ad4; }
-        .input-area .btn-icon { background:none; border:none; color:#708499; font-size:20px; cursor:pointer; padding:4px; }
-        .input-area .btn-icon:hover { color:#fff; }
-        #admin-panel { display:none; padding:10px 16px; border-top:1px solid #1e2a36; background:#17212b; }
-        #admin-panel h4 { color:#5288c1; font-size:13px; margin-bottom:6px; }
-        #admin-panel input { width:100%; padding:6px 10px; border-radius:4px; border:1px solid #1e2a36; background:#0e1621; color:#fff; font-size:12px; margin-bottom:6px; }
-        #admin-panel .row { display:flex; gap:6px; flex-wrap:wrap; }
-        #admin-panel .row button { padding:4px 10px; border:none; border-radius:4px; font-size:11px; cursor:pointer; }
-        #admin-panel .row .danger { background:#e74c3c; color:#fff; }
-        #admin-panel .row .success { background:#27ae60; color:#fff; }
-        #admin-panel .row .warning { background:#f39c12; color:#fff; }
-        #admin-panel .row .info { background:#5288c1; color:#fff; }
-        #admin-panel .list { max-height:120px; overflow-y:auto; font-size:12px; margin-top:6px; }
-        #admin-panel .list div { padding:4px; border-bottom:1px solid #1e2a36; display:flex; justify-content:space-between; }
-        #profile { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; }
-        #profile .modal { background:#17212b; border-radius:16px; padding:32px; max-width:360px; width:90%; position:relative; text-align:center; }
-        #profile .modal .close { position:absolute; top:12px; right:16px; font-size:24px; cursor:pointer; color:#708499; }
-        #profile .modal .close:hover { color:#fff; }
-        #profile .modal .p-avatar { width:80px; height:80px; border-radius:50%; object-fit:cover; margin-bottom:12px; }
-        #profile .modal .p-name { font-size:20px; font-weight:700; }
-        #profile .modal .p-id { font-size:13px; color:#708499; }
-        #profile .modal .p-status { font-size:14px; color:#708499; }
-        #profile .modal .p-role { font-size:12px; color:#ffd700; }
-        #profile .modal .p-btn { margin-top:16px; }
-        #profile .modal .p-btn button { background:#5288c1; color:#fff; border:none; padding:8px 20px; border-radius:8px; cursor:pointer; }
-        @media (max-width:600px) {
-            .sidebar { width:100%; max-height:35vh; }
-            .container { flex-direction:column; }
-            .chat { height:65vh; }
-            .msg { max-width:85%; }
-        }
+        *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+        body{background:#0a0a0a;color:#fff;height:100vh;display:flex;flex-direction:column}
+        #auth{display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a0a}
+        .card{background:#1f1f1f;padding:40px;border-radius:16px;max-width:360px;width:90%;text-align:center}
+        .card h1{color:#5288c1;margin-bottom:8px}
+        .card p{color:#888;margin-bottom:24px}
+        .card button{background:#5288c1;color:#fff;border:none;padding:12px;border-radius:8px;width:100%;font-size:16px;cursor:pointer}
+        .card button:hover{background:#6a9fd8}
+        .err{color:#e74c3c;margin-top:12px;display:none}
+        #app{display:none;height:100vh;flex-direction:column}
+        .top{background:#1f1f1f;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #333}
+        .top .user{display:flex;align-items:center;gap:10px}
+        .top .avatar{width:36px;height:36px;border-radius:50%;background:#333}
+        .top .name{font-weight:600}
+        .top .id{font-size:12px;color:#888;cursor:pointer}
+        .top .logout{color:#888;cursor:pointer}
+        .mid{display:flex;flex:1;overflow:hidden}
+        .sidebar{width:280px;background:#141414;border-right:1px solid #333;display:flex;flex-direction:column;flex-shrink:0}
+        .sidebar .find{padding:12px;display:flex;gap:6px}
+        .sidebar .find input{flex:1;padding:8px 12px;border-radius:8px;border:none;background:#1f1f1f;color:#fff;outline:none}
+        .sidebar .find button{background:#5288c1;border:none;border-radius:8px;color:#fff;padding:0 12px;cursor:pointer}
+        .sidebar .list{flex:1;overflow-y:auto;padding:8px}
+        .sidebar .item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer}
+        .sidebar .item:hover{background:#1f1f1f}
+        .sidebar .item.active{background:#1f1f1f}
+        .sidebar .item .info{flex:1;overflow:hidden}
+        .sidebar .item .name{font-weight:500}
+        .sidebar .item .last{font-size:12px;color:#888}
+        .empty{text-align:center;color:#888;padding:40px 0}
+        .chat{flex:1;display:flex;flex-direction:column;background:#0a0a0a}
+        .chat .head{padding:12px 16px;background:#1f1f1f;border-bottom:1px solid #333;display:flex;align-items:center;gap:12px}
+        .chat .head .name{font-weight:600}
+        .chat .head .status{font-size:12px;color:#888}
+        .chat .msgs{flex:1;padding:16px;overflow-y:auto;display:flex;flex-direction:column}
+        .chat .msgs .msg{max-width:70%;padding:8px 12px;border-radius:16px;margin-bottom:4px;font-size:14px;word-wrap:break-word}
+        .chat .msgs .out{background:#2b5278;align-self:flex-end;border-bottom-right-radius:4px}
+        .chat .msgs .in{background:#1f1f1f;align-self:flex-start;border-bottom-left-radius:4px}
+        .chat .msgs .time{font-size:10px;color:#888;text-align:right;margin-top:2px}
+        .chat .bottom{padding:12px;background:#1f1f1f;display:flex;gap:8px;border-top:1px solid #333}
+        .chat .bottom input{flex:1;padding:10px 16px;border-radius:20px;border:none;background:#0a0a0a;color:#fff;outline:none}
+        .chat .bottom button{background:#5288c1;border:none;border-radius:50%;width:40px;height:40px;color:#fff;font-size:18px;cursor:pointer}
+        .chat .bottom button:hover{background:#6a9fd8}
+        .empty-chat{text-align:center;color:#888;margin:auto}
+        .empty-chat span{font-size:48px;display:block;margin-bottom:16px}
+        .admin-panel{display:none;padding:12px;background:#141414;border-top:1px solid #333}
+        .admin-panel h4{color:#5288c1;font-size:13px;margin-bottom:6px}
+        .admin-panel input{width:100%;padding:6px 10px;border-radius:4px;border:none;background:#1f1f1f;color:#fff;margin-bottom:6px}
+        .admin-panel .row{display:flex;gap:6px;flex-wrap:wrap}
+        .admin-panel .row button{padding:4px 10px;border:none;border-radius:4px;font-size:11px;cursor:pointer}
+        .admin-panel .row .danger{background:#e74c3c;color:#fff}
+        .admin-panel .row .success{background:#27ae60;color:#fff}
+        .admin-panel .row .warning{background:#f39c12;color:#fff}
+        .admin-panel .row .info{background:#5288c1;color:#fff}
+        .admin-panel .list{max-height:120px;overflow-y:auto;font-size:12px;margin-top:6px}
+        .admin-panel .list div{padding:4px;border-bottom:1px solid #333;display:flex;justify-content:space-between}
+        .profile-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center}
+        .profile-modal .modal{background:#1f1f1f;border-radius:16px;padding:32px;max-width:360px;width:90%;position:relative;text-align:center}
+        .profile-modal .modal .close{position:absolute;top:12px;right:16px;font-size:24px;cursor:pointer;color:#888}
+        .profile-modal .modal .close:hover{color:#fff}
+        .profile-modal .modal img{width:80px;height:80px;border-radius:50%;object-fit:cover;margin-bottom:12px}
+        .profile-modal .modal .p-name{font-size:20px;font-weight:700}
+        .profile-modal .modal .p-id{font-size:13px;color:#888}
+        .profile-modal .modal .p-status{font-size:14px;color:#888}
+        .profile-modal .modal .p-role{font-size:12px;color:#ffd700}
+        .profile-modal .modal .p-btn{margin-top:16px}
+        .profile-modal .modal .p-btn button{background:#5288c1;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer}
+        @media(max-width:600px){.sidebar{width:100%;max-height:35vh}.mid{flex-direction:column}.chat{height:65vh}}
     </style>
 </head>
 <body>
 
+<!-- АВТОРИЗАЦИЯ -->
 <div id="auth">
     <div class="card">
-        <h1>🔐 KirmelCrypt</h1>
+        <h1>🔐 KirmelChat</h1>
         <p>Безопасный P2P-мессенджер</p>
         <button id="loginBtn">Войти через Google</button>
         <div class="err" id="authError"></div>
     </div>
 </div>
 
+<!-- ПРИЛОЖЕНИЕ -->
 <div id="app">
-    <div class="container">
+    <div class="top">
+        <div class="user">
+            <img class="avatar" id="myAvatar" src="">
+            <div>
+                <div class="name" id="myName">Загрузка...</div>
+                <div class="id" id="myIdDisplay">ID: ...</div>
+            </div>
+        </div>
+        <div class="logout" id="logoutBtn">🚪</div>
+    </div>
+    <div class="mid">
         <div class="sidebar">
-            <div class="sidebar-header">
-                <h2>🔐 KirmelCrypt</h2>
-                <div class="user-row">
-                    <img class="avatar" id="myAvatar" src="">
-                    <div>
-                        <div class="user-name" id="myName">Загрузка...</div>
-                        <div class="user-id" id="myIdDisplay">ID: ...</div>
-                    </div>
-                </div>
-                <div class="connect-row">
-                    <input type="text" id="peerInput" placeholder="Введите ID собеседника">
-                    <button id="connectBtn">➕</button>
-                </div>
+            <div class="find">
+                <input type="text" id="peerInput" placeholder="Введите ID друга">
+                <button id="connectBtn">➕</button>
             </div>
-            <div class="chats" id="chatsList">
-                <div class="empty"><span>💬</span>Нет активных чатов</div>
+            <div class="list" id="chatsList">
+                <div class="empty">💬 Нет чатов</div>
             </div>
-            <div id="admin-panel">
-                <h4>👑 Админ-панель</h4>
+            <div class="admin-panel" id="adminPanel">
+                <h4>👑 Админ</h4>
                 <input type="text" id="adminUserId" placeholder="ID пользователя">
                 <div class="row">
                     <button class="danger" id="banBtn">🚫 Бан</button>
                     <button class="success" id="unbanBtn">✅ Разбан</button>
                     <button class="warning" id="makeAdminBtn">⭐ Назначить админа</button>
                 </div>
-                <button class="info" id="showUsersBtn" style="width:100%;margin-top:4px;">📋 Список пользователей</button>
+                <button class="info" id="showUsersBtn" style="width:100%;margin-top:4px;">📋 Список</button>
                 <div class="list" id="adminUsersList"></div>
             </div>
         </div>
         <div class="chat">
-            <div class="chat-header" id="chatHeader" style="display:none;">
-                <div class="left" id="chatHeaderClick">
-                    <img class="avatar" id="chatAvatar" src="">
-                    <div>
-                        <div class="user-name" id="chatName">Собеседник</div>
-                        <div class="status">
-                            <span class="dot off" id="statusDot"></span>
-                            <span id="statusText">Подключение...</span>
-                        </div>
-                    </div>
+            <div class="head" id="chatHead" style="display:none;">
+                <img class="avatar" id="chatAvatar" src="">
+                <div>
+                    <div class="name" id="chatName">Собеседник</div>
+                    <div class="status" id="chatStatus">Подключение...</div>
                 </div>
-                <div class="actions">
-                    <button id="profileBtn">👤</button>
-                    <button id="callBtn">📞</button>
+                <div style="margin-left:auto;display:flex;gap:8px;">
+                    <button style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;" id="profileBtn">👤</button>
                 </div>
             </div>
             <div class="msgs" id="msgContainer">
                 <div class="empty-chat">
                     <span>🔐</span>
                     <h3>Безопасный чат</h3>
-                    <p>Введите ID друга для начала защищенной сессии</p>
+                    <p>Введите ID друга для начала</p>
                 </div>
             </div>
-            <div class="input-area" id="inputArea" style="display:none;">
-                <button class="btn-icon" id="emojiBtn">😊</button>
+            <div class="bottom" id="inputArea" style="display:none;">
                 <input type="text" id="msgInput" placeholder="Напишите сообщение...">
-                <button class="send" id="sendBtn">➤</button>
+                <button id="sendBtn">➤</button>
             </div>
         </div>
     </div>
 </div>
 
-<div id="profile">
+<!-- ПРОФИЛЬ -->
+<div class="profile-modal" id="profileModal">
     <div class="modal">
         <div class="close" id="profileClose">✕</div>
-        <img class="p-avatar" id="pAvatar" src="">
+        <img id="pAvatar" src="">
         <div class="p-name" id="pName">Имя</div>
         <div class="p-id" id="pId">ID: ...</div>
         <div class="p-status" id="pStatus">Статус</div>
@@ -231,7 +208,7 @@ auth.onAuthStateChanged(user => {
     if (user) {
         currentUser = user;
         $('auth').style.display = 'none';
-        $('app').style.display = 'block';
+        $('app').style.display = 'flex';
         
         myId = user.uid;
         $('myAvatar').src = user.photoURL || '';
@@ -258,12 +235,19 @@ auth.onAuthStateChanged(user => {
 });
 
 // ============================================================
-// 2. ПОКАЗ СООБЩЕНИЙ (ПРЯМОЙ РЕНДЕРИНГ)
+// 2. ВЫХОД
+// ============================================================
+$('logoutBtn').onclick = () => {
+    auth.signOut();
+    location.reload();
+};
+
+// ============================================================
+// 3. ПОКАЗ СООБЩЕНИЙ (ОСНОВНАЯ ФУНКЦИЯ)
 // ============================================================
 function renderMessages(peerId) {
     const container = $('msgContainer');
     if (!container) return;
-    
     container.innerHTML = '';
     loaded.clear();
     chatWith = peerId;
@@ -279,7 +263,7 @@ function renderMessages(peerId) {
                     const dateStr = date.toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
                     if (dateStr !== lastDate) {
                         const sep = document.createElement('div');
-                        sep.className = 'sep';
+                        sep.style.cssText = 'text-align:center;color:#888;font-size:12px;padding:12px 0 8px;width:100%;';
                         sep.textContent = dateStr;
                         container.appendChild(sep);
                         lastDate = dateStr;
@@ -292,13 +276,15 @@ function renderMessages(peerId) {
                 }
             });
             container.scrollTop = container.scrollHeight;
-            console.log('📚 Показано ' + msgs.length + ' сообщений');
+            console.log('📚 Загружено ' + msgs.length + ' сообщений');
+        } else {
+            console.log('📭 Нет сообщений');
         }
     });
 }
 
 // ============================================================
-// 3. СЛУШАТЕЛЬ НОВЫХ СООБЩЕНИЙ
+// 4. СЛУШАТЕЛЬ НОВЫХ СООБЩЕНИЙ (В РЕАЛЬНОМ ВРЕМЕНИ)
 // ============================================================
 function listenMessages() {
     db.ref('messages/' + myId).on('child_added', snap => {
@@ -306,25 +292,22 @@ function listenMessages() {
         const fromId = snap.key;
         if (!data || !data.text || data.from === myId) return;
         
-        console.log('📩 Новое сообщение от:', fromId, 'текст:', data.text);
+        console.log('📩 Новое от:', fromId, data.text);
         
-        // Если чат открыт с этим человеком - показываем
         if (chatWith && chatWith === fromId) {
             const container = $('msgContainer');
             if (!container) return;
             
-            // Проверяем последний разделитель
             const date = new Date(data.timestamp || Date.now());
             const dateStr = date.toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
-            const separators = container.querySelectorAll('.sep');
+            const separators = container.querySelectorAll('div[style*="text-align:center"]');
             let lastSep = separators[separators.length-1];
             if (!lastSep || lastSep.textContent !== dateStr) {
                 const sep = document.createElement('div');
-                sep.className = 'sep';
+                sep.style.cssText = 'text-align:center;color:#888;font-size:12px;padding:12px 0 8px;width:100%;';
                 sep.textContent = dateStr;
                 container.appendChild(sep);
             }
-            
             const div = document.createElement('div');
             div.className = 'msg in';
             const timeStr = date.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
@@ -335,7 +318,6 @@ function listenMessages() {
             updateLast(fromId, data.text);
         }
         
-        // Сохраняем чат
         db.ref('users/' + fromId).once('value', s => {
             const u = s.val();
             if (u) saveChat(fromId, u.name, u.avatar);
@@ -344,7 +326,7 @@ function listenMessages() {
 }
 
 // ============================================================
-// 4. ЧАТЫ
+// 5. ЧАТЫ
 // ============================================================
 function loadChats() {
     db.ref('chats/' + myId).on('value', snap => {
@@ -352,17 +334,17 @@ function loadChats() {
         const list = $('chatsList');
         list.innerHTML = '';
         if (!data) {
-            list.innerHTML = '<div class="empty"><span>💬</span>Нет активных чатов</div>';
+            list.innerHTML = '<div class="empty">💬 Нет чатов</div>';
             return;
         }
         const arr = Object.values(data).sort((a,b) => (b.timestamp||0) - (a.timestamp||0));
         arr.forEach(chat => {
             const div = document.createElement('div');
-            div.className = 'chat-item';
+            div.className = 'item';
             if (chat.peerId === chatWith) div.classList.add('active');
             div.dataset.id = chat.peerId;
             div.innerHTML = `
-                <img class="avatar" src="${chat.avatar || ''}">
+                <img class="avatar" src="${chat.avatar || ''}" style="width:36px;height:36px;border-radius:50%;background:#333;">
                 <div class="info">
                     <div class="name">${chat.name}</div>
                     <div class="last">${chat.lastMessage || 'Новый чат'}</div>
@@ -392,15 +374,16 @@ function updateLast(peerId, text) {
 }
 
 // ============================================================
-// 5. ОТКРЫТЬ ЧАТ
+// 6. ОТКРЫТЬ ЧАТ
 // ============================================================
 function openChat(peerId) {
     chatWith = peerId;
     $('peerInput').value = peerId;
-    $('chatHeader').style.display = 'flex';
+    $('chatHead').style.display = 'flex';
     $('inputArea').style.display = 'flex';
     $('chatName').textContent = 'Загрузка...';
     $('chatAvatar').src = '';
+    $('chatStatus').textContent = 'Онлайн ✅';
     
     const empty = document.querySelector('.empty-chat');
     if (empty) empty.style.display = 'none';
@@ -413,19 +396,15 @@ function openChat(peerId) {
         }
     });
     
-    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-    const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
+    document.querySelectorAll('.item').forEach(el => el.classList.remove('active'));
+    const item = document.querySelector(`.item[data-id="${peerId}"]`);
     if (item) item.classList.add('active');
     
-    $('statusDot').className = 'dot on';
-    $('statusText').textContent = 'Онлайн ✅';
-    
-    // ЗАГРУЖАЕМ СООБЩЕНИЯ
     renderMessages(peerId);
 }
 
 // ============================================================
-// 6. ПОДКЛЮЧИТЬСЯ
+// 7. ПОДКЛЮЧИТЬСЯ
 // ============================================================
 $('connectBtn').onclick = async () => {
     const target = $('peerInput').value.trim();
@@ -441,7 +420,7 @@ $('connectBtn').onclick = async () => {
 };
 
 // ============================================================
-// 7. ОТПРАВИТЬ
+// 8. ОТПРАВИТЬ
 // ============================================================
 $('sendBtn').onclick = () => {
     const text = $('msgInput').value.trim();
@@ -456,15 +435,15 @@ $('sendBtn').onclick = () => {
         from: myId, text, name: currentUser.displayName, timestamp: ts
     });
     
-    // Показываем сразу
+    // Показываем сразу (рендерим)
     const container = $('msgContainer');
     const date = new Date(ts);
     const dateStr = date.toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
-    const separators = container.querySelectorAll('.sep');
+    const separators = container.querySelectorAll('div[style*="text-align:center"]');
     let lastSep = separators[separators.length-1];
     if (!lastSep || lastSep.textContent !== dateStr) {
         const sep = document.createElement('div');
-        sep.className = 'sep';
+        sep.style.cssText = 'text-align:center;color:#888;font-size:12px;padding:12px 0 8px;width:100%;';
         sep.textContent = dateStr;
         container.appendChild(sep);
     }
@@ -484,15 +463,6 @@ $('msgInput').onkeydown = e => {
 };
 
 // ============================================================
-// 8. ЭМОДЗИ
-// ============================================================
-$('emojiBtn').onclick = () => {
-    const emojis = ['😊','😂','❤️','🔥','👍','👋','🎉','✨','💪','🤝'];
-    $('msgInput').value += emojis[Math.floor(Math.random() * emojis.length)];
-    $('msgInput').focus();
-};
-
-// ============================================================
 // 9. ПРОФИЛЬ
 // ============================================================
 function showProfile(userId) {
@@ -505,19 +475,17 @@ function showProfile(userId) {
         $('pStatus').textContent = user.online ? '🟢 Онлайн' : '⚫ Офлайн';
         const role = await getUserRole(userId);
         $('pRole').textContent = role === 'creator' ? '👑 Создатель' : role === 'admin' ? '⭐ Админ' : 'Пользователь';
-        $('profile').style.display = 'flex';
+        $('profileModal').style.display = 'flex';
     });
 }
 
-$('chatHeaderClick').onclick = () => { if (chatWith) showProfile(chatWith); };
 $('profileBtn').onclick = () => { if (chatWith) showProfile(chatWith); };
-$('profileClose').onclick = () => $('profile').style.display = 'none';
-$('profile').onclick = e => { if (e.target === e.currentTarget) $('profile').style.display = 'none'; };
+$('profileClose').onclick = () => $('profileModal').style.display = 'none';
+$('profileModal').onclick = e => { if (e.target === e.currentTarget) $('profileModal').style.display = 'none'; };
 $('pChatBtn').onclick = () => {
-    $('profile').style.display = 'none';
+    $('profileModal').style.display = 'none';
     if (chatWith) openChat(chatWith);
 };
-$('callBtn').onclick = () => alert('📞 Функция звонков в разработке!');
 
 // ============================================================
 // 10. РОЛИ
@@ -529,7 +497,7 @@ async function checkAdmin() {
         const a = await db.ref('admins/' + myId).once('value');
         if (a.exists()) isAdmin = true;
     }
-    if (isAdmin || isCreator) $('admin-panel').style.display = 'block';
+    if (isAdmin || isCreator) $('adminPanel').style.display = 'block';
 }
 
 async function getUserRole(userId) {
@@ -577,10 +545,10 @@ $('showUsersBtn').onclick = async () => {
         const banned = await isBanned(id);
         html += `<div><span>${user.name || 'Без имени'}</span><span>${banned ? '🚫' : '✅'}</span></div>`;
     }
-    $('adminUsersList').innerHTML = html || '<div style="color:#708499;">Нет пользователей</div>';
+    $('adminUsersList').innerHTML = html || '<div style="color:#888;">Нет пользователей</div>';
 };
 
-console.log('✅ KirmelCrypt загружен!');
+console.log('✅ KirmelChat загружен!');
 </script>
 </body>
 </html>
