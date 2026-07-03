@@ -39,10 +39,6 @@ const systemPlaceholder = document.getElementById('system-placeholder');
 const chatStatusText = document.getElementById('chat-status-text');
 const statusDot = document.querySelector('.status-dot');
 
-// ============================================
-// 1. ВХОД
-// ============================================
-
 btnLogin.addEventListener('click', () => {
     const provider = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(provider).catch(error => {
@@ -82,10 +78,6 @@ auth.onAuthStateChanged(async (user) => {
     }
 });
 
-// ============================================
-// 2. ФОРМАТИРОВАНИЕ
-// ============================================
-
 function formatDate(timestamp) {
     const date = new Date(timestamp);
     const now = new Date();
@@ -101,10 +93,6 @@ function formatDate(timestamp) {
 function formatTime(timestamp) {
     return new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
-
-// ============================================
-// 3. ОТОБРАЖЕНИЕ СООБЩЕНИЙ
-// ============================================
 
 function addDateSeparator(dateStr) {
     const container = document.getElementById('messages-container');
@@ -156,10 +144,6 @@ function escapeHTML(str) {
     d.textContent = str;
     return d.innerHTML;
 }
-
-// ============================================
-// 4. СЛУШАТЕЛЬ СООБЩЕНИЙ
-// ============================================
 
 function listenForMessages() {
     console.log('🔊 [listenForMessages] Запущен слушатель для:', myId);
@@ -237,10 +221,6 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// ============================================
-// 5. ИСТОРИЯ
-// ============================================
-
 function loadHistory(peerId) {
     const container = document.getElementById('messages-container');
     if (!container) return;
@@ -279,10 +259,6 @@ function loadHistory(peerId) {
         }
     });
 }
-
-// ============================================
-// 6. ЧАТЫ
-// ============================================
 
 function loadChats() {
     database.ref('chats/' + myId).on('value', (snapshot) => {
@@ -335,10 +311,6 @@ function updateLastMessage(peerId, text) {
     });
 }
 
-// ============================================
-// 7. ОТКРЫТИЕ ЧАТА
-// ============================================
-
 function openChat(peerId) {
     activeChatId = peerId;
     peerIdInput.value = peerId;
@@ -378,10 +350,6 @@ btnConnect.addEventListener('click', async () => {
     openChat(targetId);
 });
 
-// ============================================
-// 8. ОТПРАВКА
-// ============================================
-
 btnSend.addEventListener('click', () => {
     const text = messageInput.value.trim();
     if (!text) { alert('❌ Введите сообщение'); return; }
@@ -415,10 +383,6 @@ btnSend.addEventListener('click', () => {
 messageInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') btnSend.click();
 });
-
-// ============================================
-// 9. ПРОФИЛЬ
-// ============================================
 
 document.getElementById('chat-header-click')?.addEventListener('click', () => {
     if (activeChatId) showProfile(activeChatId);
