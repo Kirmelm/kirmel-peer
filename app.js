@@ -18,12 +18,10 @@ const database = firebase.database();
 let currentUser = null;
 let myPeerConnection = null;
 let dataChannel = null;
-let activeChat = null;
 let myKeyPair = null;
 let sharedSecretKey = null;
 let myId = null;
 let remoteId = null;
-let isCaller = false;
 let isConnected = false;
 let isProcessingCall = false;
 let myChats = {};
@@ -106,10 +104,7 @@ function generateUserId() {
     
     window.addEventListener('beforeunload', () => {
         database.ref('users/' + myId).update({ online: false });
-        if (myPeerConnection) {
-            myPeerConnection.close();
-        }
-        database.ref('calls/' + myId).remove();
+        closeConnection();
     });
     
     database.ref('calls/' + myId).remove();
@@ -211,36 +206,66 @@ function updateLastMessage(peerId, message) {
 }
 
 // ============================================
-// 4. ОТКРЫТИЕ ЧАТА
+// 4. ОТКРЫТИЕ ЧАТА (ПЕРЕПИСАНО)
 // ============================================
 
 function openChat(peerId) {
-    if (isConnected && remoteId === peerId) return;
+    console.log('📂 Открываем чат с:', peerId);
     
-    // Закрываем текущее соединение если есть
-    if (myPeerConnection) {
-        myPeerConnection.close();
-        myPeerConnection = null;
-    }
-    dataChannel = null;
-    isConnected = false;
+    // Закрываем старые соединения
+    closeConnection();
+    
+    // Сбрасываем состояние
     sharedSecretKey = null;
+    isConnected = false;
+    remoteId = peerId;
     
+    // Показываем UI
+    showChatUI(peerId);
+    
+    // Начинаем новое соединение
+    setTimeout(() => {
+        startCall(peerId);
+    }, 500);
+}
+
+function showChatUI(peerId) {
+    systemPlaceholder.style.display = 'none';
+    activeChatHeader.style.display = 'flex';
+    inputArea.style.display = 'flex';
+    chatName.innerText = 'Подключение...';
+    chatAvatar.src = '';
+    messagesContainer.innerHTML = '';
+    
+    database.ref('users/' + peerId).once('value', (snapshot) => {
+        const user = snapshot.val();
+        if (user) {
+            chatName.innerText = user.name || 'Собеседник';
+            chatAvatar.src = user.avatar || '';
+            listenUserStatus(peerId);
+        }
+    });
+    
+    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+    const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
+    if (item) item.classList.add('active');
+}
+
+function closeConnection() {
     if (connectionTimeout) {
         clearTimeout(connectionTimeout);
         connectionTimeout = null;
     }
     
-    remoteId = peerId;
-    isCaller = true;
+    if (myPeerConnection) {
+        try {
+            myPeerConnection.close();
+        } catch (e) {}
+        myPeerConnection = null;
+    }
     
-    showChat(peerId);
-    
-    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-    const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
-    if (item) item.classList.add('active');
-    
-    startCall(peerId);
+    dataChannel = null;
+    isConnected = false;
 }
 
 // ============================================
@@ -323,15 +348,9 @@ const rtcConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        {
-            urls: 'turn:turn.anyfirewall.com:443?transport=tcp',
-            username: 'webrtc',
-            credential: 'webrtc'
-        }
+        { urls: 'stun:stun2.l.google.com:19302' }
     ],
-    iceCandidatePoolSize: 10,
-    iceTransportPolicy: 'all'
+    iceCandidatePoolSize: 10
 };
 
 async function listenForCalls() {
@@ -350,10 +369,9 @@ async function listenForCalls() {
             isProcessingCall = true;
             
             if (data.type === 'offer') {
-                isCaller = false;
                 remoteId = callerId;
                 await handleIncomingCall(callerId, data);
-            } else if (data.type === 'answer' && isCaller) {
+            } else if (data.type === 'answer') {
                 await handleAnswer(data);
             } else if (data.type === 'candidate') {
                 if (myPeerConnection) {
@@ -376,9 +394,11 @@ async function listenForCalls() {
 
 async function handleIncomingCall(callerId, data) {
     try {
-        console.log('📞 Обработка входящего вызова от:', callerId);
-        myKeyPair = await generateKeyPair();
+        console.log('📞 Входящий вызов от:', callerId);
         
+        closeConnection();
+        
+        myKeyPair = await generateKeyPair();
         myPeerConnection = new RTCPeerConnection(rtcConfig);
         
         myPeerConnection.ondatachannel = (event) => {
@@ -398,15 +418,7 @@ async function handleIncomingCall(callerId, data) {
         };
         
         myPeerConnection.oniceconnectionstatechange = () => {
-            const state = myPeerConnection.iceConnectionState;
-            console.log('🔄 ICE состояние:', state);
-            if (state === 'connected') {
-                console.log('✅ ICE соединение установлено!');
-            } else if (state === 'failed') {
-                console.log('❌ ICE failed');
-            } else if (state === 'disconnected') {
-                console.log('⚠️ ICE отключен');
-            }
+            console.log('🔄 ICE состояние:', myPeerConnection.iceConnectionState);
         };
         
         await myPeerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -424,7 +436,7 @@ async function handleIncomingCall(callerId, data) {
         
         remoteId = callerId;
         saveChat(callerId);
-        showChat(callerId);
+        showChatUI(callerId);
         
     } catch (e) {
         console.error('❌ Ошибка ответа на звонок:', e);
@@ -453,7 +465,6 @@ function setupDataChannel() {
         isConnected = true;
         saveChat(remoteId);
         renderChatLayout();
-        sendHandshake();
         
         if (connectionTimeout) {
             clearTimeout(connectionTimeout);
@@ -543,16 +554,17 @@ btnConnect.addEventListener('click', async () => {
     await database.ref('calls/' + myId).remove();
     
     remoteId = peerId;
-    isCaller = true;
     saveChat(peerId);
-    await startCall(peerId);
+    openChat(peerId);
 });
 
 async function startCall(peerId) {
     try {
         console.log('📞 Звонок к:', peerId);
-        myKeyPair = await generateKeyPair();
         
+        closeConnection();
+        
+        myKeyPair = await generateKeyPair();
         myPeerConnection = new RTCPeerConnection(rtcConfig);
         
         dataChannel = myPeerConnection.createDataChannel('chat');
@@ -570,15 +582,7 @@ async function startCall(peerId) {
         };
         
         myPeerConnection.oniceconnectionstatechange = () => {
-            const state = myPeerConnection.iceConnectionState;
-            console.log('🔄 ICE состояние:', state);
-            if (state === 'connected') {
-                console.log('✅ ICE соединение установлено!');
-            } else if (state === 'failed') {
-                console.log('❌ ICE failed');
-            } else if (state === 'disconnected') {
-                console.log('⚠️ ICE отключен');
-            }
+            console.log('🔄 ICE состояние:', myPeerConnection.iceConnectionState);
         };
         
         const offer = await myPeerConnection.createOffer();
@@ -591,21 +595,13 @@ async function startCall(peerId) {
         });
         console.log('✅ Offer отправлен');
         
-        showChat(peerId);
-        
-        // Таймаут на случай если канал не открылся
+        // Таймаут
         connectionTimeout = setTimeout(() => {
             if (!isConnected) {
-                console.log('⏰ Таймаут соединения, пробуем перезапустить ICE');
-                if (myPeerConnection) {
-                    try {
-                        myPeerConnection.restartIce();
-                    } catch (e) {
-                        console.error('Ошибка перезапуска ICE:', e);
-                    }
-                }
+                console.log('⏰ Таймаут соединения');
+                resetChat();
             }
-        }, 30000); // Увеличил до 30 секунд
+        }, 30000);
         
     } catch (e) {
         console.error('❌ Ошибка звонка:', e);
@@ -618,34 +614,14 @@ async function startCall(peerId) {
 // 8. ИНТЕРФЕЙС
 // ============================================
 
-function showChat(peerId) {
-    systemPlaceholder.style.display = 'none';
-    activeChatHeader.style.display = 'flex';
-    inputArea.style.display = 'flex';
-    chatName.innerText = 'Подключение...';
-    chatAvatar.src = '';
-    
-    // Очищаем сообщения при открытии чата
-    messagesContainer.innerHTML = '';
-    
-    database.ref('users/' + peerId).once('value', (snapshot) => {
-        const user = snapshot.val();
-        if (user) {
-            chatName.innerText = user.name || 'Собеседник';
-            chatAvatar.src = user.avatar || '';
-            listenUserStatus(peerId);
-        }
-    });
-    
-    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-    const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
-    if (item) item.classList.add('active');
-}
-
 function renderChatLayout() {
     systemPlaceholder.style.display = 'none';
     activeChatHeader.style.display = 'flex';
     inputArea.style.display = 'flex';
+    chatStatusText.textContent = 'Подключено ✅';
+    if (statusDot) {
+        statusDot.className = 'status-dot online';
+    }
     
     database.ref('users/' + remoteId).once('value', (snapshot) => {
         const user = snapshot.val();
@@ -660,14 +636,19 @@ function renderChatLayout() {
     const item = document.querySelector(`.chat-item[data-id="${remoteId}"]`);
     if (item) item.classList.add('active');
     
-    sendHandshake();
+    // Отправляем handshake
+    setTimeout(() => {
+        if (dataChannel && dataChannel.readyState === 'open') {
+            sendHandshake();
+        }
+    }, 1000);
 }
 
 function listenUserStatus(userId) {
     database.ref('users/' + userId).on('value', (snapshot) => {
         const user = snapshot.val();
         if (user) {
-            if (chatStatusText) {
+            if (chatStatusText && !isConnected) {
                 chatStatusText.textContent = user.online ? 'Онлайн' : 'Офлайн';
                 if (statusDot) {
                     statusDot.className = 'status-dot ' + (user.online ? 'online' : 'offline');
@@ -935,12 +916,6 @@ function getRoleBadge(role) {
     return '';
 }
 
-function getRoleColor(role) {
-    if (role === 'creator') return '#ffd700';
-    if (role === 'admin') return '#00bfff';
-    return '#708499';
-}
-
 async function showAdminPanel() {
     const isAdmin = await checkIfAdmin();
     const isCreator = await checkIfCreator();
@@ -951,121 +926,12 @@ async function showAdminPanel() {
     }
 }
 
-async function banUser(userId, reason) {
-    if (!await checkIfAdmin()) {
-        alert('❌ Нет прав администратора!');
-        return false;
-    }
-    try {
-        await database.ref('banned/' + userId).set({
-            bannedAt: Date.now(),
-            reason: reason || 'Нарушение правил',
-            bannedBy: currentUser.uid
-        });
-        if (dataChannel && remoteId === userId) {
-            dataChannel.close();
-            resetChat();
-        }
-        console.log('✅ Пользователь забанен:', userId);
-        return true;
-    } catch (e) {
-        console.error('Ошибка бана:', e);
-        return false;
-    }
-}
-
-async function unbanUser(userId) {
-    if (!await checkIfAdmin()) {
-        alert('❌ Нет прав администратора!');
-        return false;
-    }
-    try {
-        await database.ref('banned/' + userId).remove();
-        console.log('✅ Пользователь разбанен:', userId);
-        return true;
-    } catch (e) {
-        console.error('Ошибка разбана:', e);
-        return false;
-    }
-}
-
-async function checkBanned(userId) {
-    try {
-        const snapshot = await database.ref('banned/' + userId).once('value');
-        return snapshot.exists();
-    } catch (e) {
-        console.error('Ошибка проверки бана:', e);
-        return false;
-    }
-}
-
-async function getAllUsers() {
-    if (!await checkIfAdmin()) {
-        alert('❌ Нет прав администратора!');
-        return [];
-    }
-    try {
-        const snapshot = await database.ref('users').once('value');
-        const users = [];
-        snapshot.forEach((child) => {
-            users.push({
-                id: child.key,
-                ...child.val()
-            });
-        });
-        return users;
-    } catch (e) {
-        console.error('Ошибка получения пользователей:', e);
-        return [];
-    }
-}
-
-async function makeAdmin(userId) {
-    if (!await checkIfAdmin()) {
-        alert('❌ Нет прав администратора!');
-        return false;
-    }
-    try {
-        const snapshot = await database.ref('users/' + userId).once('value');
-        const user = snapshot.val();
-        if (!user) {
-            alert('❌ Пользователь не найден');
-            return false;
-        }
-        await database.ref('admins/' + userId).set({
-            role: 'admin',
-            email: user.email || '',
-            name: user.name || '',
-            addedAt: Date.now()
-        });
-        console.log('✅ Пользователь назначен админом:', userId);
-        return true;
-    } catch (e) {
-        console.error('Ошибка назначения админа:', e);
-        return false;
-    }
-}
-
 // ============================================
 // 13. RESET
 // ============================================
 
 function resetChat() {
-    if (myPeerConnection) {
-        myPeerConnection.close();
-        myPeerConnection = null;
-    }
-    dataChannel = null;
-    activeChat = null;
-    sharedSecretKey = null;
-    isConnected = false;
-    isCaller = false;
-    isProcessingCall = false;
-    
-    if (connectionTimeout) {
-        clearTimeout(connectionTimeout);
-        connectionTimeout = null;
-    }
+    closeConnection();
     
     if (myId) {
         database.ref('calls/' + myId).remove();
@@ -1073,6 +939,10 @@ function resetChat() {
     if (remoteId) {
         database.ref('calls/' + remoteId + '/' + myId).remove();
     }
+    
+    remoteId = null;
+    sharedSecretKey = null;
+    isConnected = false;
     
     activeChatHeader.style.display = 'none';
     inputArea.style.display = 'none';
@@ -1086,4 +956,4 @@ function escapeHTML(str) {
     return div.innerHTML;
 }
 
-console.log('✅ App.js загружен! (с сохранением чатов)');
+console.log('✅ App.js загружен! (полностью переписан)');
