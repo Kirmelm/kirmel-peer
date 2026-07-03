@@ -66,20 +66,6 @@ auth.onAuthStateChanged((user) => {
     }
 });
 
-auth.onIdTokenChanged((user) => {
-    if (user === null && currentUser !== null) {
-        showBlockMessage();
-    }
-});
-
-function showBlockMessage() {
-    authScreen.style.display = 'flex';
-    appScreen.style.display = 'none';
-    errorMessage.innerText = "Ваш аккаунт заблокирован администратором KirmelPeer.";
-    errorMessage.style.display = 'block';
-    btnLogin.style.display = 'none';
-}
-
 function initUserMetadata() {
     myAvatar.src = currentUser.photoURL || '';
     myName.innerText = currentUser.displayName || 'Аноним';
@@ -160,17 +146,29 @@ async function decryptMessage(encryptedObj, key) {
 async function initPeer() {
     myKeyPair = await generateKeyPair();
     
-    // ИСПРАВЛЕНО: Используем публичный сервер PeerJS
-    peer = new Peer(undefined, {
-        host: '0.peerjs.com',  // Альтернативный сервер
-        port: 443,
-        path: '/',
-        secure: true,
-        debug: 2  // Включаем отладку
-    });
+    // ИСПРАВЛЕНО: Используем другой сервер PeerJS
+    try {
+        peer = new Peer(undefined, {
+            host: '0.peerjs.com',
+            port: 443,
+            path: '/',
+            secure: true,
+            debug: 2,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        });
+    } catch (e) {
+        console.error('Ошибка создания Peer:', e);
+        alert('Ошибка подключения к серверу. Перезагрузите страницу.');
+        return;
+    }
 
     peer.on('open', (id) => {
-        console.log('PeerJS подключен! ID:', id);
+        console.log('✅ PeerJS подключен! ID:', id);
         myIdDisplay.innerText = `Ваш ID: ${id} (клик для копирования)`;
         myIdDisplay.onclick = () => {
             navigator.clipboard.writeText(id);
@@ -179,7 +177,7 @@ async function initPeer() {
     });
 
     peer.on('connection', (conn) => {
-        console.log('Входящее соединение от:', conn.peer);
+        console.log('📥 Входящее соединение от:', conn.peer);
         if (activeConnection) {
             conn.close(); 
             return;
@@ -188,21 +186,27 @@ async function initPeer() {
     });
 
     peer.on('error', (err) => {
-        console.error('PeerJS ошибка:', err);
-        // Показываем ошибку пользователю
+        console.error('❌ PeerJS ошибка:', err);
+        
         if (err.type === 'unavailable-id') {
-            alert('Ошибка: ID уже используется. Попробуйте перезагрузить страницу.');
+            alert('Ошибка: ID уже используется. Перезагрузите страницу.');
         } else if (err.type === 'peer-unavailable') {
-            alert('Собеседник не найден. Проверьте правильность ID.');
+            alert('❌ Собеседник не найден. Проверьте ID.');
+        } else if (err.type === 'network') {
+            alert('⚠️ Проблема с сетью. Проверьте интернет-соединение.');
         } else {
-            alert('Ошибка соединения: ' + err.message);
+            // Не показываем ошибку для некоторых типов
+            if (err.type !== 'browser-incompatible') {
+                console.log('PeerJS ошибка (не критичная):', err.message);
+            }
         }
     });
 
     peer.on('disconnected', () => {
-        console.log('PeerJS отключен');
-        // Пытаемся переподключиться
-        peer.reconnect();
+        console.log('⚠️ PeerJS отключен, переподключаемся...');
+        setTimeout(() => {
+            peer.reconnect();
+        }, 3000);
     });
 }
 
@@ -217,7 +221,7 @@ btnConnect.addEventListener('click', () => {
         return;
     }
 
-    console.log('Подключаемся к:', peerId);
+    console.log('🔗 Подключаемся к:', peerId);
     const conn = peer.connect(peerId, {
         reliable: true
     });
@@ -228,7 +232,7 @@ async function setupConnection(conn) {
     activeConnection = conn;
 
     conn.on('open', async () => {
-        console.log('Соединение открыто с:', conn.peer);
+        console.log('✅ Соединение открыто с:', conn.peer);
         const rawPubKey = await exportPublicKey(myKeyPair.publicKey);
         
         conn.send({
@@ -240,7 +244,7 @@ async function setupConnection(conn) {
     });
 
     conn.on('data', async (data) => {
-        console.log('Получены данные от:', conn.peer, 'тип:', data.type);
+        console.log('📩 Получены данные от:', conn.peer);
         
         if (data.type === 'HANDSHAKE') {
             activeChat = {
@@ -253,15 +257,6 @@ async function setupConnection(conn) {
             sharedSecretKey = await deriveSharedKey(myKeyPair.privateKey, peerPublicKey);
 
             renderChatLayout();
-            
-            // Отправляем ответный handshake
-            const rawPubKey = await exportPublicKey(myKeyPair.publicKey);
-            conn.send({
-                type: 'HANDSHAKE',
-                name: currentUser.displayName,
-                avatar: currentUser.photoURL,
-                publicKey: rawPubKey
-            });
         } 
         else if (data.type === 'MESSAGE') {
             const decryptedText = await decryptMessage(data.encrypted, sharedSecretKey);
@@ -270,13 +265,13 @@ async function setupConnection(conn) {
     });
 
     conn.on('close', () => {
-        console.log('Соединение закрыто');
+        console.log('🔌 Соединение закрыто');
         alert("Соединение закрыто");
         resetChat();
     });
 
     conn.on('error', (err) => {
-        console.error('Ошибка соединения:', err);
+        console.error('❌ Ошибка соединения:', err);
         alert('Ошибка соединения: ' + err.message);
         resetChat();
     });
@@ -356,7 +351,6 @@ function resetChat() {
     chatsList.innerHTML = '';
     activeChatHeader.style.display = 'none';
     inputArea.style.display = 'none';
-    systemPlaceholder.style.display = 'block';
     messagesContainer.innerHTML = `<div class="system-info" id="system-placeholder">Соединение разорвано</div>`;
 }
 
@@ -366,5 +360,4 @@ function escapeHTML(str) {
     return div.innerHTML;
 }
 
-// Дополнительно: обработка ошибок для кнопки логина
-console.log('App.js загружен успешно!');
+console.log('✅ App.js загружен!');
