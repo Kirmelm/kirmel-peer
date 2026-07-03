@@ -13,21 +13,11 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const database = firebase.database();
 
-// ============================================
-// ПЕРЕМЕННЫЕ
-// ============================================
-
 let currentUser = null;
 let myId = null;
-let remoteId = null;
-let isConnected = false;
-let messageListener = null;
-let isAdmin = false;
-let isCreator = false;
-let loadedMessages = new Set();
 let activeChatId = null;
+let loadedMessages = new Set();
 
-// DOM
 const authScreen = document.getElementById('auth-screen');
 const appScreen = document.getElementById('app-screen');
 const btnLogin = document.getElementById('btn-login');
@@ -84,9 +74,7 @@ auth.onAuthStateChanged(async (user) => {
         });
         
         loadChats();
-        listenForGlobalMessages();
-        await checkAdminStatus();
-        showAdminPanel();
+        listenForMessages();
         
     } else {
         authScreen.style.display = 'flex';
@@ -95,7 +83,7 @@ auth.onAuthStateChanged(async (user) => {
 });
 
 // ============================================
-// 2. ФОРМАТИРОВАНИЕ ДАТЫ
+// 2. ФОРМАТИРОВАНИЕ
 // ============================================
 
 function formatDate(timestamp) {
@@ -104,22 +92,14 @@ function formatDate(timestamp) {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    
     const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    
-    if (msgDate.getTime() === today.getTime()) {
-        return 'Сегодня';
-    } else if (msgDate.getTime() === yesterday.getTime()) {
-        return 'Вчера';
-    } else {
-        const options = { day: 'numeric', month: 'long', year: 'numeric' };
-        return date.toLocaleDateString('ru-RU', options);
-    }
+    if (msgDate.getTime() === today.getTime()) return 'Сегодня';
+    if (msgDate.getTime() === yesterday.getTime()) return 'Вчера';
+    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 function formatTime(timestamp) {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    return new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
 // ============================================
@@ -129,7 +109,6 @@ function formatTime(timestamp) {
 function addDateSeparator(dateStr) {
     const container = document.getElementById('messages-container');
     if (!container) return;
-    
     const div = document.createElement('div');
     div.className = 'date-separator';
     div.textContent = dateStr;
@@ -139,22 +118,23 @@ function addDateSeparator(dateStr) {
 function appendMessage(text, dir, timestamp) {
     const container = document.getElementById('messages-container');
     if (!container) {
-        console.error('❌ Контейнер не найден!');
+        console.error('❌ messages-container не найден!');
         return;
     }
     
+    console.log('📝 [appendMessage] Текст:', text);
+    console.log('📝 [appendMessage] Направление:', dir);
+    
     const msgKey = text + timestamp + dir;
     if (loadedMessages.has(msgKey)) {
-        console.log('⚠️ Дубль:', text);
+        console.log('⚠️ Дубль, пропускаем');
         return;
     }
     loadedMessages.add(msgKey);
     
     const dateStr = formatDate(timestamp || Date.now());
-    
     const separators = container.querySelectorAll('.date-separator');
     let lastSeparator = separators[separators.length - 1];
-    
     if (!lastSeparator || lastSeparator.textContent !== dateStr) {
         addDateSeparator(dateStr);
     }
@@ -168,8 +148,7 @@ function appendMessage(text, dir, timestamp) {
     `;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
-    
-    console.log(`✅ Сообщение показано: ${text} (${dir})`);
+    console.log('✅ [appendMessage] Сообщение добавлено в чат!');
 }
 
 function escapeHTML(str) {
@@ -179,32 +158,38 @@ function escapeHTML(str) {
 }
 
 // ============================================
-// 4. ГЛОБАЛЬНЫЙ СЛУШАТЕЛЬ (ФИКС!)
+// 4. СЛУШАТЕЛЬ СООБЩЕНИЙ
 // ============================================
 
-function listenForGlobalMessages() {
-    // Слушаем ВСЕ сообщения, которые приходят к НАМ
+function listenForMessages() {
+    console.log('🔊 [listenForMessages] Запущен слушатель для:', myId);
+    
     database.ref('messages/' + myId).on('child_added', (snapshot) => {
         const data = snapshot.val();
         const fromId = snapshot.key;
         
         if (!data || !data.text) return;
         
-        console.log('📩 ПОЛУЧЕНО СООБЩЕНИЕ от:', fromId);
-        console.log('📩 Текст:', data.text);
-        console.log('📩 Текущий чат:', activeChatId);
+        console.log('📩 [СЛУШАТЕЛЬ] Сообщение от:', fromId);
+        console.log('📩 [СЛУШАТЕЛЬ] Текст:', data.text);
+        console.log('📩 [СЛУШАТЕЛЬ] from:', data.from);
+        console.log('📩 [СЛУШАТЕЛЬ] myId:', myId);
+        console.log('📩 [СЛУШАТЕЛЬ] activeChatId:', activeChatId);
         
-        // Определяем направление
-        const dir = data.from === myId ? 'out' : 'in';
-        
-        // ПОКАЗЫВАЕМ СООБЩЕНИЕ В ЧАТЕ (если чат открыт)
-        if (activeChatId) {
-            console.log('✅ Показываем в чате');
-            appendMessage(data.text, dir, data.timestamp || Date.now());
-            updateLastMessage(fromId, data.text);
+        if (data.from === myId) {
+            console.log('📩 [СЛУШАТЕЛЬ] Это моё сообщение, пропускаем');
+            return;
         }
         
-        // Обновляем список чатов
+        if (activeChatId) {
+            console.log('📩 [СЛУШАТЕЛЬ] Показываем в чате!');
+            appendMessage(data.text, 'in', data.timestamp || Date.now());
+            updateLastMessage(fromId, data.text);
+            showNotification(`📩 ${data.name || 'Собеседник'}: ${data.text.substring(0, 30)}`);
+        } else {
+            console.log('📩 [СЛУШАТЕЛЬ] Чат не открыт');
+        }
+        
         database.ref('users/' + fromId).once('value', (snap) => {
             const user = snap.val();
             if (user) {
@@ -212,36 +197,23 @@ function listenForGlobalMessages() {
                 updateLastMessage(fromId, data.text);
             }
         });
-        
-        // Уведомление
-        if (data.from !== myId) {
-            showNotification(`📩 ${data.name || 'Собеседник'}: ${data.text.substring(0, 30)}`);
-        }
     });
 }
 
 function showNotification(text) {
     const notif = document.createElement('div');
     notif.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #2b5278;
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        z-index: 9999;
-        font-size: 14px;
+        position: fixed; top: 20px; right: 20px;
+        background: #2b5278; color: white;
+        padding: 12px 20px; border-radius: 8px;
+        z-index: 9999; font-size: 14px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         animation: slideIn 0.3s ease;
-        max-width: 300px;
-        cursor: pointer;
-        z-index: 10000;
+        max-width: 300px; cursor: pointer;
     `;
     notif.textContent = text;
     notif.onclick = () => notif.remove();
     document.body.appendChild(notif);
-    
     setTimeout(() => {
         notif.style.opacity = '0';
         notif.style.transition = 'opacity 0.3s';
@@ -266,13 +238,12 @@ style.textContent = `
 document.head.appendChild(style);
 
 // ============================================
-// 5. ЗАГРУЗКА ИСТОРИИ
+// 5. ИСТОРИЯ
 // ============================================
 
-function loadFullHistory(peerId) {
+function loadHistory(peerId) {
     const container = document.getElementById('messages-container');
     if (!container) return;
-    
     container.innerHTML = '';
     loadedMessages.clear();
     activeChatId = peerId;
@@ -283,36 +254,28 @@ function loadFullHistory(peerId) {
         const data = snapshot.val();
         if (data) {
             const messages = Object.values(data).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-            
             let lastDate = '';
             messages.forEach(msg => {
                 if (msg && msg.text) {
                     const dir = msg.from === myId ? 'out' : 'in';
                     const dateStr = formatDate(msg.timestamp || Date.now());
-                    
                     if (dateStr !== lastDate) {
                         addDateSeparator(dateStr);
                         lastDate = dateStr;
                     }
-                    
                     const div = document.createElement('div');
                     div.className = 'message ' + dir;
-                    const timeStr = formatTime(msg.timestamp || Date.now());
                     div.innerHTML = `
                         <div>${escapeHTML(msg.text)}</div>
-                        <div class="message-time">${timeStr}</div>
+                        <div class="message-time">${formatTime(msg.timestamp || Date.now())}</div>
                     `;
                     container.appendChild(div);
-                    
                     const msgKey = msg.text + (msg.timestamp || Date.now()) + dir;
                     loadedMessages.add(msgKey);
                 }
             });
-            
             console.log(`📚 Загружено ${messages.length} сообщений`);
             container.scrollTop = container.scrollHeight;
-        } else {
-            console.log('📭 Нет истории сообщений');
         }
     });
 }
@@ -324,41 +287,28 @@ function loadFullHistory(peerId) {
 function loadChats() {
     database.ref('chats/' + myId).on('value', (snapshot) => {
         const data = snapshot.val();
-        renderChatsList(data);
-    });
-}
-
-function renderChatsList(data) {
-    if (!chatsList) return;
-    chatsList.innerHTML = '';
-    
-    if (!data) {
-        chatsList.innerHTML = `
-            <div class="empty-chats">
-                <span>💬</span>
-                <p>Нет активных чатов</p>
-            </div>
-        `;
-        return;
-    }
-    
-    const sorted = Object.values(data).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-    sorted.forEach(chat => {
-        const div = document.createElement('div');
-        div.className = 'chat-item';
-        if (chat.peerId === activeChatId) {
-            div.classList.add('active');
+        if (!chatsList) return;
+        chatsList.innerHTML = '';
+        if (!data) {
+            chatsList.innerHTML = `<div class="empty-chats"><span>💬</span><p>Нет чатов</p></div>`;
+            return;
         }
-        div.dataset.id = chat.peerId;
-        div.innerHTML = `
-            <img class="avatar" src="${chat.avatar || ''}">
-            <div class="user-info">
-                <div class="user-name">${chat.name}</div>
-                <div class="chat-status">${chat.lastMessage || 'Новый чат'}</div>
-            </div>
-        `;
-        div.onclick = () => openChat(chat.peerId);
-        chatsList.appendChild(div);
+        const sorted = Object.values(data).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        sorted.forEach(chat => {
+            const div = document.createElement('div');
+            div.className = 'chat-item';
+            if (chat.peerId === activeChatId) div.classList.add('active');
+            div.dataset.id = chat.peerId;
+            div.innerHTML = `
+                <img class="avatar" src="${chat.avatar || ''}">
+                <div class="user-info">
+                    <div class="user-name">${chat.name}</div>
+                    <div class="chat-status">${chat.lastMessage || 'Новый чат'}</div>
+                </div>
+            `;
+            div.onclick = () => openChat(chat.peerId);
+            chatsList.appendChild(div);
+        });
     });
 }
 
@@ -390,114 +340,59 @@ function updateLastMessage(peerId, text) {
 // ============================================
 
 function openChat(peerId) {
-    console.log('📂 Открываем чат с:', peerId);
-    
-    remoteId = peerId;
-    isConnected = true;
     activeChatId = peerId;
     peerIdInput.value = peerId;
-    showChatUI(peerId);
-    loadFullHistory(peerId);
     
-    if (chatStatusText) chatStatusText.textContent = 'Онлайн ✅';
-    if (statusDot) statusDot.className = 'status-dot online';
-}
-
-function showChatUI(peerId) {
     if (systemPlaceholder) systemPlaceholder.style.display = 'none';
     if (activeChatHeader) activeChatHeader.style.display = 'flex';
     if (inputArea) inputArea.style.display = 'flex';
     if (chatName) chatName.textContent = 'Загрузка...';
     if (chatAvatar) chatAvatar.src = '';
     
-    database.ref('users/' + peerId).once('value', async (snap) => {
+    database.ref('users/' + peerId).once('value', (snap) => {
         const user = snap.val();
         if (user && chatName) {
             chatName.textContent = user.name || 'Собеседник';
             if (chatAvatar) chatAvatar.src = user.avatar || '';
-            
-            const role = await getUserRole(peerId);
-            const badge = getRoleBadge(role);
-            const color = getRoleColor(role);
-            if (badge) {
-                const badgeSpan = document.createElement('span');
-                badgeSpan.className = 'role-badge';
-                badgeSpan.style.cssText = `
-                    color: ${color};
-                    font-size: 11px;
-                    margin-left: 6px;
-                    background: rgba(255,255,255,0.1);
-                    padding: 2px 8px;
-                    border-radius: 10px;
-                    display: inline-block;
-                `;
-                badgeSpan.textContent = badge;
-                chatName.appendChild(badgeSpan);
-            }
         }
     });
     
     document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
     const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
     if (item) item.classList.add('active');
+    
+    if (chatStatusText) chatStatusText.textContent = 'Онлайн ✅';
+    if (statusDot) statusDot.className = 'status-dot online';
+    
+    loadHistory(peerId);
 }
-
-// ============================================
-// 8. КНОПКА "ПОДКЛЮЧИТЬСЯ"
-// ============================================
 
 btnConnect.addEventListener('click', async () => {
     const targetId = peerIdInput.value.trim();
-    if (!targetId) {
-        alert('❌ Введите ID');
-        return;
-    }
-    if (targetId === myId) {
-        alert('❌ Нельзя к себе');
-        return;
-    }
-    
-    if (await checkBanned(targetId)) {
-        alert('❌ Этот пользователь забанен!');
-        return;
-    }
-    if (await checkBanned(myId)) {
-        alert('❌ Вы забанены!');
-        return;
-    }
-    
+    if (!targetId) { alert('❌ Введите ID'); return; }
+    if (targetId === myId) { alert('❌ Нельзя к себе'); return; }
     const snap = await database.ref('users/' + targetId).once('value');
-    if (!snap.exists()) {
-        alert('❌ Пользователь не найден');
-        return;
-    }
-    
+    if (!snap.exists()) { alert('❌ Пользователь не найден'); return; }
     const user = snap.val();
     saveChat(targetId, user.name, user.avatar);
     openChat(targetId);
 });
 
 // ============================================
-// 9. ОТПРАВКА (ГЛАВНЫЙ ФИКС!)
+// 8. ОТПРАВКА
 // ============================================
 
 btnSend.addEventListener('click', () => {
     const text = messageInput.value.trim();
-    if (!text) {
-        alert('❌ Введите сообщение');
-        return;
-    }
-    if (!activeChatId) {
-        alert('❌ Нет собеседника');
-        return;
-    }
+    if (!text) { alert('❌ Введите сообщение'); return; }
+    if (!activeChatId) { alert('❌ Нет собеседника'); return; }
     
     const targetId = activeChatId;
     const timestamp = Date.now();
     
-    console.log('📤 ОТПРАВКА сообщения:', text, 'кому:', targetId);
+    console.log('📤 [ОТПРАВКА] Сообщение:', text);
+    console.log('📤 [ОТПРАВКА] Кому:', targetId);
     
-    // Отправляем СОБЕСЕДНИКУ (в его папку messages)
     database.ref('messages/' + targetId + '/' + myId).push().set({
         from: myId,
         text: text,
@@ -505,7 +400,6 @@ btnSend.addEventListener('click', () => {
         timestamp: timestamp
     });
     
-    // Сохраняем У СЕБЯ (в свою папку messages)
     database.ref('messages/' + myId + '/' + targetId).push().set({
         from: myId,
         text: text,
@@ -513,7 +407,6 @@ btnSend.addEventListener('click', () => {
         timestamp: timestamp
     });
     
-    // Показываем сразу
     appendMessage(text, 'out', timestamp);
     updateLastMessage(targetId, text);
     messageInput.value = '';
@@ -524,164 +417,7 @@ messageInput.addEventListener('keypress', (e) => {
 });
 
 // ============================================
-// 10. РОЛИ
-// ============================================
-
-async function checkAdminStatus() {
-    try {
-        const creatorSnap = await database.ref('creator').once('value');
-        if (creatorSnap.exists() && creatorSnap.val() === myId) {
-            isCreator = true;
-            isAdmin = true;
-            return;
-        }
-        const adminSnap = await database.ref('admins/' + myId).once('value');
-        if (adminSnap.exists()) {
-            isAdmin = true;
-        }
-    } catch(e) {
-        console.log('Ошибка проверки роли:', e);
-    }
-}
-
-async function getUserRole(userId) {
-    try {
-        const creatorSnap = await database.ref('creator').once('value');
-        if (creatorSnap.exists() && creatorSnap.val() === userId) {
-            return 'creator';
-        }
-        const adminSnap = await database.ref('admins/' + userId).once('value');
-        if (adminSnap.exists()) {
-            return 'admin';
-        }
-        return 'user';
-    } catch(e) {
-        return 'user';
-    }
-}
-
-function getRoleBadge(role) {
-    if (role === 'creator') return '👑 Создатель';
-    if (role === 'admin') return '⭐ Админ';
-    return '';
-}
-
-function getRoleColor(role) {
-    if (role === 'creator') return '#ffd700';
-    if (role === 'admin') return '#00bfff';
-    return '#708499';
-}
-
-async function showAdminPanel() {
-    const panel = document.getElementById('admin-panel');
-    if (!panel) return;
-    
-    if (isAdmin || isCreator) {
-        panel.style.display = 'block';
-        
-        document.getElementById('btn-ban')?.addEventListener('click', async () => {
-            const userId = document.getElementById('admin-user-id').value.trim();
-            if (!userId) return alert('Введите ID');
-            await banUser(userId, prompt('Причина бана:'));
-        });
-        
-        document.getElementById('btn-unban')?.addEventListener('click', async () => {
-            const userId = document.getElementById('admin-user-id').value.trim();
-            if (!userId) return alert('Введите ID');
-            await unbanUser(userId);
-        });
-        
-        document.getElementById('btn-make-admin')?.addEventListener('click', async () => {
-            const userId = document.getElementById('admin-user-id').value.trim();
-            if (!userId) return alert('Введите ID');
-            await makeAdmin(userId);
-        });
-        
-        document.getElementById('btn-show-users')?.addEventListener('click', async () => {
-            await showUserList();
-        });
-    }
-}
-
-async function banUser(userId, reason) {
-    if (!isAdmin && !isCreator) return alert('❌ Нет прав!');
-    try {
-        await database.ref('banned/' + userId).set({
-            bannedAt: Date.now(),
-            reason: reason || 'Нарушение правил',
-            bannedBy: myId
-        });
-        alert('✅ Пользователь забанен!');
-    } catch(e) {
-        alert('❌ Ошибка бана');
-    }
-}
-
-async function unbanUser(userId) {
-    if (!isAdmin && !isCreator) return alert('❌ Нет прав!');
-    try {
-        await database.ref('banned/' + userId).remove();
-        alert('✅ Пользователь разбанен!');
-    } catch(e) {
-        alert('❌ Ошибка разбана');
-    }
-}
-
-async function makeAdmin(userId) {
-    if (!isCreator) return alert('❌ Только создатель может назначать админов!');
-    try {
-        const snap = await database.ref('users/' + userId).once('value');
-        const user = snap.val();
-        if (!user) return alert('❌ Пользователь не найден');
-        await database.ref('admins/' + userId).set({
-            role: 'admin',
-            name: user.name || 'Без имени',
-            addedAt: Date.now()
-        });
-        alert('✅ Пользователь назначен админом!');
-    } catch(e) {
-        alert('❌ Ошибка');
-    }
-}
-
-async function showUserList() {
-    if (!isAdmin && !isCreator) return alert('❌ Нет прав!');
-    try {
-        const snap = await database.ref('users').once('value');
-        const users = snap.val();
-        const list = document.getElementById('admin-users-list');
-        if (!list) return;
-        
-        let html = '<div style="max-height:200px;overflow-y:auto;">';
-        for (const [id, user] of Object.entries(users || {})) {
-            const role = await getUserRole(id);
-            const badge = getRoleBadge(role);
-            const isBanned = await checkBanned(id);
-            html += `
-                <div style="padding:4px;border-bottom:1px solid #333;display:flex;justify-content:space-between;">
-                    <span>${user.name || 'Без имени'} ${badge}</span>
-                    <span>${isBanned ? '🚫' : '✅'}</span>
-                </div>
-            `;
-        }
-        html += '</div>';
-        list.innerHTML = html;
-    } catch(e) {
-        alert('❌ Ошибка загрузки');
-    }
-}
-
-async function checkBanned(userId) {
-    try {
-        const snap = await database.ref('banned/' + userId).once('value');
-        return snap.exists();
-    } catch(e) {
-        return false;
-    }
-}
-
-// ============================================
-// 11. ПРОФИЛЬ
+// 9. ПРОФИЛЬ
 // ============================================
 
 document.getElementById('chat-header-click')?.addEventListener('click', () => {
@@ -706,15 +442,10 @@ async function showProfile(userId) {
     const snap = await database.ref('users/' + userId).once('value');
     const user = snap.val();
     if (!user) return;
-    
-    const role = await getUserRole(userId);
-    const badge = getRoleBadge(role);
-    
     document.getElementById('profile-avatar').src = user.avatar || '';
     document.getElementById('profile-name').textContent = user.name || 'Без имени';
     document.getElementById('profile-id').textContent = 'ID: ' + userId.substring(0, 12);
     document.getElementById('profile-status').textContent = user.online ? '🟢 Онлайн' : '⚫ Офлайн';
-    document.getElementById('profile-role').textContent = badge || 'Пользователь';
     document.getElementById('profile-modal').style.display = 'flex';
 }
 
@@ -728,44 +459,4 @@ document.getElementById('profile-modal')?.addEventListener('click', (e) => {
     }
 });
 
-console.log('✅ App.js загружен! (FIX: сообщения видны у обоих)');
-
-// ============================================
-// ФУНКЦИЯ ПОКАЗА СООБЩЕНИЙ (ФИКС)
-// ============================================
-
-function appendMessage(text, dir, timestamp) {
-    // 1. Находим контейнер
-    const container = document.getElementById('messages-container');
-    if (!container) {
-        console.error('❌ messages-container не найден!');
-        return;
-    }
-    
-    console.log('📝 [appendMessage] Текст:', text);
-    console.log('📝 [appendMessage] Направление:', dir);
-    console.log('📝 [appendMessage] Контейнер найден:', container);
-    
-    // 2. Создаем элемент
-    const div = document.createElement('div');
-    div.className = 'message ' + dir;
-    
-    // 3. Форматируем время
-    const time = new Date(timestamp || Date.now()).toLocaleTimeString('ru-RU', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-    });
-    
-    // 4. Вставляем HTML
-    div.innerHTML = `
-        <div>${escapeHTML(text)}</div>
-        <div class="message-time">${time}</div>
-    `;
-    
-    // 5. Добавляем в контейнер
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-    
-    console.log('✅ [appendMessage] Сообщение добавлено в чат!');
-    console.log('📝 [appendMessage] Текущее количество сообщений:', container.children.length);
-}
+console.log('✅ App.js загружен! (ФИНАЛЬНАЯ ВЕРСИЯ)');
