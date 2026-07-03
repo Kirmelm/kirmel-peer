@@ -6,17 +6,13 @@
     <title>KirmelCrypt</title>
     <link rel="stylesheet" href="style.css">
     
-    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-    
-    <!-- PEERJS (ЭТО БЫЛО ПРОПУЩЕНО!) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
 </head>
 <body>
 
-    <!-- ===== ЭКРАН ВХОДА ===== -->
+    <!-- Экран входа -->
     <div id="auth-screen">
         <div class="auth-card">
             <h1>🔐 KirmelCrypt</h1>
@@ -26,11 +22,11 @@
         </div>
     </div>
 
-    <!-- ===== ГЛАВНЫЙ ЭКРАН ===== -->
+    <!-- Главный экран -->
     <div id="app-screen" style="display: none;">
         <div class="container">
             
-            <!-- ===== ЛЕВАЯ ПАНЕЛЬ ===== -->
+            <!-- Сайдбар -->
             <div class="sidebar">
                 <div class="sidebar-header">
                     <div class="app-title">
@@ -39,7 +35,7 @@
                     </div>
                     
                     <div class="user-profile">
-                        <img id="my-avatar" class="avatar" src="" alt="">
+                        <img id="my-avatar" class="avatar" src="">
                         <div class="user-info">
                             <div id="my-name" class="user-name">Загрузка...</div>
                             <div id="my-id-display" class="my-id">ID: тестируется...</div>
@@ -55,20 +51,35 @@
                     </div>
                 </div>
                 
+                <!-- Список чатов -->
                 <div class="chats-list" id="chats-list">
                     <div class="empty-chats">
                         <span>💬</span>
                         <p>Нет активных чатов</p>
-                        <p style="font-size: 12px; color: var(--text-muted);">Введите ID друга чтобы начать</p>
                     </div>
+                </div>
+                
+                <!-- ===== АДМИН-ПАНЕЛЬ (вставляем СЮДА) ===== -->
+                <div id="admin-panel" style="display: none; padding: 10px; border-top: 1px solid var(--border);">
+                    <h3 style="color: var(--accent); font-size: 14px;">👑 Админ-панель</h3>
+                    <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
+                        <input type="text" id="admin-user-id" class="input-field" placeholder="ID пользователя" style="font-size: 12px; padding: 6px;">
+                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                            <button class="admin-btn admin-btn-danger" id="btn-ban" style="background:#dc3545;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;">🚫 Бан</button>
+                            <button class="admin-btn admin-btn-success" id="btn-unban" style="background:#28a745;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;">✅ Разбан</button>
+                            <button class="admin-btn admin-btn-warning" id="btn-make-admin" style="background:#ffc107;color:#333;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;">⭐ Назначить админа</button>
+                        </div>
+                        <button class="admin-btn" id="btn-show-users" style="width:100%;background:var(--accent);color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;">📋 Список пользователей</button>
+                    </div>
+                    <div id="admin-users-list" style="max-height: 150px; overflow-y: auto; margin-top: 8px; font-size: 12px;"></div>
                 </div>
             </div>
 
-            <!-- ===== ПРАВАЯ ПАНЕЛЬ ===== -->
+            <!-- Окно чата -->
             <div class="main-chat">
                 <div class="chat-header" id="active-chat-header" style="display: none;">
                     <div class="chat-header-left" id="chat-header-click" style="cursor: pointer; display: flex; align-items: center; gap: 12px; flex: 1;">
-                        <img id="chat-avatar" class="avatar" src="" alt="">
+                        <img id="chat-avatar" class="avatar" src="">
                         <div class="chat-header-info">
                             <div id="chat-name" class="user-name">Собеседник</div>
                             <div class="chat-status" id="chat-status">
@@ -102,12 +113,12 @@
         </div>
     </div>
 
-    <!-- ===== МОДАЛЬНОЕ ОКНО ПРОФИЛЯ ===== -->
+    <!-- Модальное окно профиля -->
     <div id="profile-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
         <div class="modal-content">
             <div class="modal-close" id="profile-modal-close">✕</div>
             <div class="profile-modal-body">
-                <img id="profile-avatar" class="profile-avatar" src="" alt="">
+                <img id="profile-avatar" class="profile-avatar" src="">
                 <div id="profile-name" class="profile-name">Имя</div>
                 <div id="profile-id" class="profile-id">ID: ...</div>
                 <div id="profile-status" class="profile-status">Статус</div>
