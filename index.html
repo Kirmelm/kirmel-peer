@@ -4,13 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KirmelPeer</title>
-    <!-- Стили приложения -->
-    <link rel="stylesheet" href="style.css?v=2">
-    
-    <!-- ИСПРАВЛЕНО: Рабочие JS-файлы из CDNJS, которые браузер пропустит без ошибок носнифф -->
-    <script src="https://cloudflare.com"></script>
-    <script src="https://cloudflare.com"></script>
-    <script src="https://cloudflare.com"></script>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -70,7 +64,7 @@
         </div>
     </div>
 
-    <!-- Подключение логики -->
-    <script src="app.js?v=2"></script>
+    <!-- ИСПРАВЛЕНО: type="module" загружает код как современный модуль и защищает от кэша -->
+    <script type="module" src="app.js?v=777"></script>
 </body>
 </html>
