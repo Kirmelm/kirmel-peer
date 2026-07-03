@@ -3,80 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KirmelPeer</title>
+    <title>KirmelCrypt - Безопасный P2P мессенджер</title>
+    
     <!-- Стили -->
     <link rel="stylesheet" href="style.css">
     
-    <!-- ПОДКЛЮЧАЕМ БИБЛИОТЕКИ ПРАВИЛЬНО -->
     <!-- Firebase (через CDN) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     
-    <!-- PeerJS -->
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- PeerJS (исправленная версия) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
 </head>
 <body>
 
-    <!-- Экран входа -->
+    <!-- ==================== ЭКРАН ВХОДА ==================== -->
     <div id="auth-screen">
         <div class="auth-card">
-            <h1>KirmelCrypt</h1>
-            <p>Безопасный P2P-мессенджер со сквозным шифрованием</p>
-            <button class="btn" id="btn-login">Войти через Google</button>
+            <div class="logo">
+                <span class="logo-icon">🔐</span>
+                <h1>KirmelCrypt</h1>
+            </div>
+            <p class="subtitle">Безопасный P2P-мессенджер со сквозным шифрованием</p>
+            
+            <button class="btn btn-google" id="btn-login">
+                <svg class="google-icon" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+                Войти через Google
+            </button>
+            
             <div id="error-message"></div>
         </div>
     </div>
 
-    <!-- Главный экран -->
-    <div id="app-screen">
+    <!-- ==================== ГЛАВНЫЙ ЭКРАН ==================== -->
+    <div id="app-screen" style="display: none;">
         <div class="container">
-            <!-- Сайдбар -->
+            
+            <!-- ===== ЛЕВАЯ ПАНЕЛЬ (Сайдбар) ===== -->
             <div class="sidebar">
-                <div class="header">
-                    <h2>KirmelCrypt</h2>
+                <div class="sidebar-header">
+                    <div class="app-title">
+                        <span class="app-icon">🔐</span>
+                        <h2>KirmelCrypt</h2>
+                    </div>
+                    
+                    <!-- Профиль пользователя -->
                     <div class="user-profile">
-                        <img id="my-avatar" class="avatar" src="" alt="">
+                        <img id="my-avatar" class="avatar" src="" alt="Аватар">
                         <div class="user-info">
                             <div id="my-name" class="user-name">Загрузка...</div>
                             <div id="my-id-display" class="my-id">ID: генерируется...</div>
                         </div>
                     </div>
+                    
+                    <!-- Подключение к собеседнику -->
                     <div class="connect-box">
-                        <input type="text" id="peer-id-input" class="input-field" placeholder="Введи ID друга">
-                        <button class="btn" id="btn-connect">Подключиться</button>
+                        <div class="connect-label">Подключиться к другу</div>
+                        <div class="connect-input-group">
+                            <input type="text" id="peer-id-input" class="input-field" placeholder="Введите ID собеседника">
+                            <button class="btn btn-connect" id="btn-connect">Подключиться</button>
+                        </div>
                     </div>
                 </div>
+                
+                <!-- Список чатов -->
                 <div class="chats-list" id="chats-list">
-                    <!-- Список активных чатов -->
+                    <div class="empty-chats">
+                        <span>💬</span>
+                        <p>Нет активных чатов</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Окно чата -->
+            <!-- ===== ПРАВАЯ ПАНЕЛЬ (Окно чата) ===== -->
             <div class="main-chat">
+                <!-- Шапка чата -->
                 <div class="chat-header" id="active-chat-header" style="display: none;">
-                    <img id="chat-avatar" class="avatar" src="" alt="">
-                    <div>
+                    <img id="chat-avatar" class="avatar" src="" alt="Аватар собеседника">
+                    <div class="chat-header-info">
                         <div id="chat-name" class="user-name">Собеседник</div>
-                        <div class="chat-status">Защищенное P2P соединение</div>
+                        <div class="chat-status">
+                            <span class="status-dot"></span>
+                            Защищенное P2P соединение
+                        </div>
                     </div>
                 </div>
 
+                <!-- Область сообщений -->
                 <div class="messages-container" id="messages-container">
                     <div class="system-info" id="system-placeholder">
-                        Введите ID друга для начала безопасной сессии. Все сообщения шифруются на вашем устройстве.
+                        <div class="placeholder-icon">🔐</div>
+                        <h3>Безопасный чат</h3>
+                        <p>Введите ID друга для начала защищенной сессии.<br>Все сообщения шифруются на вашем устройстве.</p>
                     </div>
                 </div>
 
+                <!-- Панель ввода -->
                 <div class="chat-input-area" id="input-area" style="display: none;">
                     <input type="text" id="message-input" class="input-field" placeholder="Напишите сообщение...">
-                    <button class="btn" id="btn-send" style="width: auto;">Отправить</button>
+                    <button class="btn btn-send" id="btn-send">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"/>
+                        </svg>
+                        Отправить
+                    </button>
                 </div>
             </div>
+            
         </div>
     </div>
 
-    <!-- Скрипты приложения (ПОРЯДОК ВАЖЕН!) -->
+    <!-- ==================== СКРИПТЫ ==================== -->
     <script src="app.js"></script>
     <script src="index.js"></script>
+    
+    <!-- Индикатор загрузки -->
+    <div id="loading-indicator" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+        <div style="background: #182533; padding: 30px; border-radius: 12px; text-align: center;">
+            <div style="font-size: 40px; margin-bottom: 10px;">⏳</div>
+            <div style="color: #f5f5f5;">Подключение...</div>
+        </div>
+    </div>
+
 </body>
 </html>
