@@ -30,17 +30,27 @@ btnLogin.addEventListener('click', () => {
 auth.onAuthStateChanged(user => {
     if (user) {
         currentUser = user;
-        document.getElementById('auth-screen').style.display = 'none';
-        document.getElementById('app-screen').style.display = 'block';
+        const authScreen = document.getElementById('auth-screen');
+        const appScreen = document.getElementById('app-screen');
+        if (authScreen) authScreen.style.display = 'none';
+        if (appScreen) appScreen.style.display = 'block';
         
         myId = user.uid;
-        document.getElementById('my-avatar').src = user.photoURL || '';
-        document.getElementById('my-name').textContent = user.displayName || 'Аноним';
-        document.getElementById('my-id-display').textContent = `ID: ${myId.substring(0, 12)} (клик)`;
-        document.getElementById('my-id-display').onclick = () => {
-            navigator.clipboard.writeText(myId.substring(0, 12));
-            alert('✅ ID скопирован!');
-        };
+        
+        const avatar = document.getElementById('my-avatar');
+        if (avatar) avatar.src = user.photoURL || '';
+        
+        const name = document.getElementById('my-name');
+        if (name) name.textContent = user.displayName || 'Аноним';
+        
+        const idDisplay = document.getElementById('my-id-display');
+        if (idDisplay) {
+            idDisplay.textContent = `ID: ${myId.substring(0, 12)} (клик)`;
+            idDisplay.onclick = () => {
+                navigator.clipboard.writeText(myId.substring(0, 12));
+                alert('✅ ID скопирован!');
+            };
+        }
         
         database.ref('users/' + myId).set({
             name: user.displayName,
@@ -52,8 +62,10 @@ auth.onAuthStateChanged(user => {
         listenMessages();
         checkAdmin();
     } else {
-        document.getElementById('auth-screen').style.display = 'flex';
-        document.getElementById('app-screen').style.display = 'none';
+        const authScreen = document.getElementById('auth-screen');
+        const appScreen = document.getElementById('app-screen');
+        if (authScreen) authScreen.style.display = 'flex';
+        if (appScreen) appScreen.style.display = 'none';
     }
 });
 
@@ -80,6 +92,7 @@ function listenMessages() {
         
         if (chatWith && chatWith === snap.key) {
             showMessage(data.text, 'in', data.timestamp);
+            updateLastMessage(snap.key, data.text);
         }
         
         database.ref('users/' + snap.key).once('value', s => {
@@ -92,6 +105,7 @@ function listenMessages() {
 // ===== ИСТОРИЯ =====
 function loadHistory(peerId) {
     const container = document.getElementById('messages-container');
+    if (!container) return;
     container.innerHTML = '';
     chatWith = peerId;
     
@@ -112,6 +126,7 @@ function loadChats() {
     database.ref('chats/' + myId).on('value', snap => {
         const data = snap.val();
         const list = document.getElementById('chats-list');
+        if (!list) return;
         list.innerHTML = '';
         if (!data) {
             list.innerHTML = '<div class="empty-chats">💬<p>Нет чатов</p></div>';
@@ -121,6 +136,7 @@ function loadChats() {
             const div = document.createElement('div');
             div.className = 'chat-item';
             if (chat.peerId === chatWith) div.classList.add('active');
+            div.dataset.id = chat.peerId;
             div.innerHTML = `
                 <img class="avatar" src="${chat.avatar || ''}">
                 <div class="user-info">
@@ -151,90 +167,175 @@ function updateLastMessage(peerId, text) {
     });
 }
 
-// ===== ОТКРЫТИЕ ЧАТА =====
+// ===== ОТКРЫТИЕ ЧАТА (ИСПРАВЛЕНО) =====
 function openChat(peerId) {
     chatWith = peerId;
-    document.getElementById('peer-id-input').value = peerId;
-    document.getElementById('system-placeholder').style.display = 'none';
-    document.getElementById('active-chat-header').style.display = 'flex';
-    document.getElementById('input-area').style.display = 'flex';
-    document.getElementById('chat-name').textContent = 'Загрузка...';
+    
+    const input = document.getElementById('peer-id-input');
+    if (input) input.value = peerId;
+    
+    const placeholder = document.getElementById('system-placeholder');
+    if (placeholder) placeholder.style.display = 'none';
+    
+    const header = document.getElementById('active-chat-header');
+    if (header) header.style.display = 'flex';
+    
+    const inputArea = document.getElementById('input-area');
+    if (inputArea) inputArea.style.display = 'flex';
+    
+    const chatNameEl = document.getElementById('chat-name');
+    if (chatNameEl) chatNameEl.textContent = 'Загрузка...';
+    
+    const chatAvatarEl = document.getElementById('chat-avatar');
+    if (chatAvatarEl) chatAvatarEl.src = '';
     
     database.ref('users/' + peerId).once('value', snap => {
         const user = snap.val();
-        if (user) document.getElementById('chat-name').textContent = user.name || 'Собеседник';
-        document.getElementById('chat-avatar').src = user?.avatar || '';
+        if (user && chatNameEl) {
+            chatNameEl.textContent = user.name || 'Собеседник';
+        }
+        if (chatAvatarEl && user) {
+            chatAvatarEl.src = user.avatar || '';
+        }
     });
     
     document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
     const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
     if (item) item.classList.add('active');
     
+    const statusText = document.getElementById('chat-status-text');
+    if (statusText) statusText.textContent = 'Онлайн ✅';
+    
+    const dot = document.querySelector('.status-dot');
+    if (dot) dot.className = 'status-dot online';
+    
     loadHistory(peerId);
 }
 
-document.getElementById('btn-connect').addEventListener('click', async () => {
-    const target = document.getElementById('peer-id-input').value.trim();
-    if (!target) return alert('Введите ID');
-    if (target === myId) return alert('Нельзя к себе');
-    
-    const snap = await database.ref('users/' + target).once('value');
-    if (!snap.exists()) return alert('Пользователь не найден');
-    
-    const user = snap.val();
-    saveChat(target, user.name, user.avatar);
-    openChat(target);
-});
+// ===== КНОПКА ПОДКЛЮЧИТЬСЯ =====
+const btnConnect = document.getElementById('btn-connect');
+if (btnConnect) {
+    btnConnect.addEventListener('click', async () => {
+        const input = document.getElementById('peer-id-input');
+        const target = input ? input.value.trim() : '';
+        if (!target) return alert('Введите ID');
+        if (target === myId) return alert('Нельзя к себе');
+        
+        const snap = await database.ref('users/' + target).once('value');
+        if (!snap.exists()) return alert('Пользователь не найден');
+        
+        const user = snap.val();
+        saveChat(target, user.name, user.avatar);
+        openChat(target);
+    });
+}
 
 // ===== ОТПРАВКА =====
-document.getElementById('btn-send').addEventListener('click', () => {
-    const text = document.getElementById('message-input').value.trim();
-    if (!text) return alert('Введите сообщение');
-    if (!chatWith) return alert('Нет собеседника');
-    
-    const ts = Date.now();
-    database.ref('messages/' + chatWith + '/' + myId).push().set({
-        from: myId, text, name: currentUser.displayName, timestamp: ts
+const btnSend = document.getElementById('btn-send');
+if (btnSend) {
+    btnSend.addEventListener('click', () => {
+        const input = document.getElementById('message-input');
+        const text = input ? input.value.trim() : '';
+        if (!text) return alert('Введите сообщение');
+        if (!chatWith) return alert('Нет собеседника');
+        
+        const ts = Date.now();
+        database.ref('messages/' + chatWith + '/' + myId).push().set({
+            from: myId, text, name: currentUser.displayName, timestamp: ts
+        });
+        database.ref('messages/' + myId + '/' + chatWith).push().set({
+            from: myId, text, name: currentUser.displayName, timestamp: ts
+        });
+        
+        showMessage(text, 'out', ts);
+        updateLastMessage(chatWith, text);
+        if (input) input.value = '';
     });
-    database.ref('messages/' + myId + '/' + chatWith).push().set({
-        from: myId, text, name: currentUser.displayName, timestamp: ts
-    });
-    
-    showMessage(text, 'out', ts);
-    updateLastMessage(chatWith, text);
-    document.getElementById('message-input').value = '';
-});
+}
 
-document.getElementById('message-input').addEventListener('keypress', e => {
-    if (e.key === 'Enter') document.getElementById('btn-send').click();
-});
+const msgInput = document.getElementById('message-input');
+if (msgInput) {
+    msgInput.addEventListener('keypress', e => {
+        if (e.key === 'Enter') {
+            const btn = document.getElementById('btn-send');
+            if (btn) btn.click();
+        }
+    });
+}
 
 // ===== ПРОФИЛЬ =====
-document.getElementById('chat-header-click').onclick = () => {
-    if (chatWith) showProfile(chatWith);
-};
-document.getElementById('btn-profile').onclick = () => {
-    if (chatWith) showProfile(chatWith);
-};
+const headerClick = document.getElementById('chat-header-click');
+if (headerClick) {
+    headerClick.onclick = () => {
+        if (chatWith) showProfile(chatWith);
+    };
+}
+
+const profileBtn = document.getElementById('btn-profile');
+if (profileBtn) {
+    profileBtn.onclick = () => {
+        if (chatWith) showProfile(chatWith);
+    };
+}
 
 async function showProfile(userId) {
     const snap = await database.ref('users/' + userId).once('value');
     const user = snap.val();
     if (!user) return;
     
-    document.getElementById('profile-avatar').src = user.avatar || '';
-    document.getElementById('profile-name').textContent = user.name || 'Без имени';
-    document.getElementById('profile-id').textContent = 'ID: ' + userId.substring(0, 12);
-    document.getElementById('profile-status').textContent = user.online ? '🟢 Онлайн' : '⚫ Офлайн';
-    document.getElementById('profile-modal').style.display = 'flex';
+    const avatar = document.getElementById('profile-avatar');
+    if (avatar) avatar.src = user.avatar || '';
+    
+    const name = document.getElementById('profile-name');
+    if (name) name.textContent = user.name || 'Без имени';
+    
+    const id = document.getElementById('profile-id');
+    if (id) id.textContent = 'ID: ' + userId.substring(0, 12);
+    
+    const status = document.getElementById('profile-status');
+    if (status) status.textContent = user.online ? '🟢 Онлайн' : '⚫ Офлайн';
+    
+    const modal = document.getElementById('profile-modal');
+    if (modal) modal.style.display = 'flex';
 }
 
-document.getElementById('profile-modal-close').onclick = () => {
-    document.getElementById('profile-modal').style.display = 'none';
-};
-document.getElementById('profile-modal').onclick = e => {
-    if (e.target === e.currentTarget) document.getElementById('profile-modal').style.display = 'none';
-};
+const modalClose = document.getElementById('profile-modal-close');
+if (modalClose) {
+    modalClose.onclick = () => {
+        const modal = document.getElementById('profile-modal');
+        if (modal) modal.style.display = 'none';
+    };
+}
+
+const modal = document.getElementById('profile-modal');
+if (modal) {
+    modal.onclick = e => {
+        if (e.target === e.currentTarget) {
+            modal.style.display = 'none';
+        }
+    };
+}
+
+const profileChat = document.getElementById('profile-chat');
+if (profileChat) {
+    profileChat.onclick = () => {
+        const modal = document.getElementById('profile-modal');
+        if (modal) modal.style.display = 'none';
+        if (chatWith) openChat(chatWith);
+    };
+}
+
+// ===== ЭМОДЗИ =====
+const emojiBtn = document.getElementById('btn-emoji');
+if (emojiBtn) {
+    emojiBtn.onclick = () => {
+        const input = document.getElementById('message-input');
+        if (!input) return;
+        const emojis = ['😊', '😂', '❤️', '🔥', '👍', '👋', '🎉', '✨', '💪', '🤝'];
+        input.value += emojis[Math.floor(Math.random() * emojis.length)];
+        input.focus();
+    };
+}
 
 // ===== АДМИНКА =====
 let isAdmin = false, isCreator = false;
@@ -246,46 +347,68 @@ async function checkAdmin() {
         const a = await database.ref('admins/' + myId).once('value');
         if (a.exists()) isAdmin = true;
     }
-    if (isAdmin || isCreator) document.getElementById('admin-panel').style.display = 'block';
+    const panel = document.getElementById('admin-panel');
+    if (panel && (isAdmin || isCreator)) {
+        panel.style.display = 'block';
+    }
 }
 
-document.getElementById('btn-ban').onclick = async () => {
-    const id = document.getElementById('admin-user-id').value.trim();
-    if (!id) return alert('Введите ID');
-    if (!isAdmin && !isCreator) return alert('Нет прав');
-    await database.ref('banned/' + id).set({ bannedAt: Date.now(), reason: 'Нарушение', bannedBy: myId });
-    alert('✅ Забанен');
-};
-document.getElementById('btn-unban').onclick = async () => {
-    const id = document.getElementById('admin-user-id').value.trim();
-    if (!id) return alert('Введите ID');
-    if (!isAdmin && !isCreator) return alert('Нет прав');
-    await database.ref('banned/' + id).remove();
-    alert('✅ Разбанен');
-};
-document.getElementById('btn-make-admin').onclick = async () => {
-    const id = document.getElementById('admin-user-id').value.trim();
-    if (!id) return alert('Введите ID');
-    if (!isCreator) return alert('Только создатель');
-    const snap = await database.ref('users/' + id).once('value');
-    if (!snap.exists()) return alert('Пользователь не найден');
-    await database.ref('admins/' + id).set({ role: 'admin', name: snap.val().name, addedAt: Date.now() });
-    alert('✅ Админ назначен');
-};
-document.getElementById('btn-show-users').onclick = async () => {
-    if (!isAdmin && !isCreator) return alert('Нет прав');
-    const snap = await database.ref('users').once('value');
-    const users = snap.val();
-    const list = document.getElementById('admin-users-list');
-    let html = '';
-    for (const [id, user] of Object.entries(users || {})) {
-        const banned = await database.ref('banned/' + id).once('value');
-        html += `<div style="padding:4px;border-bottom:1px solid #333;display:flex;justify-content:space-between;">
-            <span>${user.name || 'Без имени'}</span>
-            <span>${banned.exists() ? '🚫' : '✅'}</span>
-        </div>`;
-    }
-    list.innerHTML = html;
-};
+const banBtn = document.getElementById('btn-ban');
+if (banBtn) {
+    banBtn.onclick = async () => {
+        const input = document.getElementById('admin-user-id');
+        const id = input ? input.value.trim() : '';
+        if (!id) return alert('Введите ID');
+        if (!isAdmin && !isCreator) return alert('Нет прав');
+        await database.ref('banned/' + id).set({ bannedAt: Date.now(), reason: 'Нарушение', bannedBy: myId });
+        alert('✅ Забанен');
+    };
+}
+
+const unbanBtn = document.getElementById('btn-unban');
+if (unbanBtn) {
+    unbanBtn.onclick = async () => {
+        const input = document.getElementById('admin-user-id');
+        const id = input ? input.value.trim() : '';
+        if (!id) return alert('Введите ID');
+        if (!isAdmin && !isCreator) return alert('Нет прав');
+        await database.ref('banned/' + id).remove();
+        alert('✅ Разбанен');
+    };
+}
+
+const makeAdminBtn = document.getElementById('btn-make-admin');
+if (makeAdminBtn) {
+    makeAdminBtn.onclick = async () => {
+        const input = document.getElementById('admin-user-id');
+        const id = input ? input.value.trim() : '';
+        if (!id) return alert('Введите ID');
+        if (!isCreator) return alert('Только создатель');
+        const snap = await database.ref('users/' + id).once('value');
+        if (!snap.exists()) return alert('Пользователь не найден');
+        await database.ref('admins/' + id).set({ role: 'admin', name: snap.val().name, addedAt: Date.now() });
+        alert('✅ Админ назначен');
+    };
+}
+
+const showUsersBtn = document.getElementById('btn-show-users');
+if (showUsersBtn) {
+    showUsersBtn.onclick = async () => {
+        if (!isAdmin && !isCreator) return alert('Нет прав');
+        const snap = await database.ref('users').once('value');
+        const users = snap.val();
+        const list = document.getElementById('admin-users-list');
+        if (!list) return;
+        let html = '';
+        for (const [id, user] of Object.entries(users || {})) {
+            const banned = await database.ref('banned/' + id).once('value');
+            html += `<div style="padding:4px;border-bottom:1px solid #333;display:flex;justify-content:space-between;">
+                <span>${user.name || 'Без имени'}</span>
+                <span>${banned.exists() ? '🚫' : '✅'}</span>
+            </div>`;
+        }
+        list.innerHTML = html;
+    };
+}
 
 console.log('✅ App.js загружен!');
