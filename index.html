@@ -10,6 +10,9 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <!-- PEERJS (ЭТО БЫЛО ПРОПУЩЕНО!) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
 </head>
 <body>
 
@@ -27,7 +30,7 @@
     <div id="app-screen" style="display: none;">
         <div class="container">
             
-            <!-- ===== ЛЕВАЯ ПАНЕЛЬ (Список чатов) ===== -->
+            <!-- ===== ЛЕВАЯ ПАНЕЛЬ ===== -->
             <div class="sidebar">
                 <div class="sidebar-header">
                     <div class="app-title">
@@ -35,16 +38,14 @@
                         <h2>KirmelCrypt</h2>
                     </div>
                     
-                    <!-- Профиль пользователя -->
-                    <div class="user-profile" id="my-profile">
+                    <div class="user-profile">
                         <img id="my-avatar" class="avatar" src="" alt="">
                         <div class="user-info">
                             <div id="my-name" class="user-name">Загрузка...</div>
-                            <div id="my-id-display" class="my-id">ID: генерируется...</div>
+                            <div id="my-id-display" class="my-id">ID: тестируется...</div>
                         </div>
                     </div>
                     
-                    <!-- Подключение -->
                     <div class="connect-box">
                         <div class="connect-label">Новый чат</div>
                         <div class="connect-input-group">
@@ -54,7 +55,6 @@
                     </div>
                 </div>
                 
-                <!-- Список чатов -->
                 <div class="chats-list" id="chats-list">
                     <div class="empty-chats">
                         <span>💬</span>
@@ -64,9 +64,8 @@
                 </div>
             </div>
 
-            <!-- ===== ПРАВАЯ ПАНЕЛЬ (Окно чата) ===== -->
-            <div class="main-chat" id="main-chat">
-                <!-- Шапка чата -->
+            <!-- ===== ПРАВАЯ ПАНЕЛЬ ===== -->
+            <div class="main-chat">
                 <div class="chat-header" id="active-chat-header" style="display: none;">
                     <div class="chat-header-left" id="chat-header-click" style="cursor: pointer; display: flex; align-items: center; gap: 12px; flex: 1;">
                         <img id="chat-avatar" class="avatar" src="" alt="">
@@ -84,7 +83,6 @@
                     </div>
                 </div>
 
-                <!-- Область сообщений -->
                 <div class="messages-container" id="messages-container">
                     <div class="system-info" id="system-placeholder">
                         <div class="placeholder-icon">🔐</div>
@@ -93,7 +91,6 @@
                     </div>
                 </div>
 
-                <!-- Панель ввода -->
                 <div class="chat-input-area" id="input-area" style="display: none;">
                     <button class="input-btn" id="btn-emoji" title="Эмодзи">😊</button>
                     <button class="input-btn" id="btn-attach" title="Прикрепить">📎</button>
