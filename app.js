@@ -120,48 +120,103 @@ style.textContent = `
 document.head.appendChild(style);
 
 // ============================================
-// PEERJS (БЕЗ ТВОЕГО СЕРВЕРА!)
+// PEERJS (С ДРУГИМ СЕРВЕРОМ!)
 // ============================================
 
 function initPeerJS(uid) {
-    // Используем uid как ID в PeerJS
     const peerId = uid.substring(0, 12);
     
-    peer = new Peer(peerId, {
-        host: '0.peerjs.com',
-        port: 443,
-        path: '/',
-        secure: true,
-        debug: 0
-    });
+    // Пробуем несколько серверов
+    const servers = [
+        { host: '0.peerjs.com', port: 443, path: '/', secure: true },
+        { host: 'peerjs-server.herokuapp.com', port: 443, path: '/', secure: true },
+        { host: '0.peerjs.com', port: 9000, path: '/', secure: false }
+    ];
     
-    peer.on('open', (id) => {
-        console.log('✅ PeerJS подключен! ID:', id);
-        myId = id;
-        myIdDisplay.textContent = `ID: ${id} (клик)`;
-        myIdDisplay.onclick = () => {
-            navigator.clipboard.writeText(id);
-            showNotification('✅ ID скопирован!');
-        };
-    });
+    let serverIndex = 0;
     
-    peer.on('connection', (incomingConn) => {
-        console.log('📞 Входящее соединение от:', incomingConn.peer);
-        if (conn) {
-            incomingConn.close();
+    function tryConnect() {
+        if (serverIndex >= servers.length) {
+            showNotification('❌ Не удалось подключиться к серверу');
             return;
         }
-        setupConnection(incomingConn);
-    });
-    
-    peer.on('error', (err) => {
-        console.log('PeerJS ошибка:', err.type);
-        if (err.type === 'peer-unavailable') {
-            showNotification('❌ Собеседник не найден');
-        } else if (err.type === 'network') {
-            showNotification('⚠️ Проблема с сетью');
+        
+        const server = servers[serverIndex];
+        console.log(`🔄 Пробуем сервер ${serverIndex + 1}/${servers.length}: ${server.host}`);
+        
+        try {
+            peer = new Peer(peerId, {
+                host: server.host,
+                port: server.port,
+                path: server.path,
+                secure: server.secure,
+                debug: 0,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+            
+            peer.on('open', (id) => {
+                console.log('✅ PeerJS подключен! ID:', id);
+                myId = id;
+                myIdDisplay.textContent = `ID: ${id} (клик)`;
+                myIdDisplay.onclick = () => {
+                    navigator.clipboard.writeText(id);
+                    showNotification('✅ ID скопирован!');
+                };
+            });
+            
+            peer.on('connection', (incomingConn) => {
+                console.log('📞 Входящее соединение от:', incomingConn.peer);
+                if (conn) {
+                    incomingConn.close();
+                    return;
+                }
+                setupConnection(incomingConn);
+            });
+            
+            peer.on('error', (err) => {
+                console.log('PeerJS ошибка:', err.type);
+                
+                if (err.type === 'network' || err.type === 'server-error') {
+                    // Пробуем следующий сервер
+                    serverIndex++;
+                    if (peer) {
+                        try { peer.destroy(); } catch(e) {}
+                        peer = null;
+                    }
+                    setTimeout(tryConnect, 1000);
+                } else if (err.type === 'peer-unavailable') {
+                    showNotification('❌ Собеседник не найден');
+                } else if (err.type === 'unavailable-id') {
+                    // ID занят - пробуем следующий сервер
+                    serverIndex++;
+                    if (peer) {
+                        try { peer.destroy(); } catch(e) {}
+                        peer = null;
+                    }
+                    setTimeout(tryConnect, 1000);
+                }
+            });
+            
+            peer.on('disconnected', () => {
+                console.log('⚠️ PeerJS отключен');
+                if (peer && !peer.destroyed) {
+                    try { peer.reconnect(); } catch(e) {}
+                }
+            });
+            
+        } catch(e) {
+            console.error('Ошибка создания Peer:', e);
+            serverIndex++;
+            setTimeout(tryConnect, 1000);
         }
-    });
+    }
+    
+    tryConnect();
 }
 
 // ============================================
@@ -218,8 +273,11 @@ btnConnect.addEventListener('click', async () => {
         showNotification('❌ Уже есть соединение');
         return;
     }
+    if (!peer) {
+        showNotification('❌ Ожидание подключения к серверу...');
+        return;
+    }
     
-    // Проверяем пользователя в Firebase
     const snap = await database.ref('users/' + targetId).once('value');
     if (!snap.exists()) {
         showNotification('❌ Пользователь не найден');
@@ -229,11 +287,14 @@ btnConnect.addEventListener('click', async () => {
     remoteId = targetId;
     showNotification(`📞 Подключение...`);
     
-    const newConn = peer.connect(targetId, { reliable: true });
-    setupConnection(newConn);
-    
-    const user = snap.val();
-    saveChat(targetId, user.name, user.avatar);
+    try {
+        const newConn = peer.connect(targetId, { reliable: true });
+        setupConnection(newConn);
+        const user = snap.val();
+        saveChat(targetId, user.name, user.avatar);
+    } catch(e) {
+        showNotification('❌ Ошибка подключения: ' + e.message);
+    }
 });
 
 function setupConnection(incomingConn) {
@@ -325,7 +386,8 @@ function loadChats(uid) {
             chatsList.innerHTML = `
                 <div class="empty-chats">
                     <span>💬</span>
-                    <p>Нет чатов</p>
+                    <p>Нет активных чатов</p>
+                    <p style="font-size: 12px; color: var(--text-muted);">Введите ID друга чтобы начать</p>
                 </div>
             `;
             return;
