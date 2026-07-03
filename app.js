@@ -21,6 +21,7 @@ let currentUser = null;
 let myId = null;
 let remoteId = null;
 let isConnected = false;
+let messageListener = null;
 
 // DOM
 const authScreen = document.getElementById('auth-screen');
@@ -56,7 +57,7 @@ btnLogin.addEventListener('click', () => {
     });
 });
 
-auth.onAuthStateChanged((user) => {
+auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
         authScreen.style.display = 'none';
@@ -79,6 +80,9 @@ auth.onAuthStateChanged((user) => {
         });
         
         loadChats();
+        listenForGlobalMessages();
+        checkAdminStatus();
+        showAdminPanel();
         
     } else {
         authScreen.style.display = 'flex';
@@ -87,7 +91,238 @@ auth.onAuthStateChanged((user) => {
 });
 
 // ============================================
-// 2. ЧАТЫ
+// 2. РОЛИ И АДМИНКА
+// ============================================
+
+let isAdmin = false;
+let isCreator = false;
+
+async function checkAdminStatus() {
+    try {
+        // Проверяем создатель
+        const creatorSnap = await database.ref('creator').once('value');
+        if (creatorSnap.exists() && creatorSnap.val() === myId) {
+            isCreator = true;
+            isAdmin = true;
+            return;
+        }
+        
+        // Проверяем админ
+        const adminSnap = await database.ref('admins/' + myId).once('value');
+        if (adminSnap.exists()) {
+            isAdmin = true;
+        }
+    } catch(e) {
+        console.log('Ошибка проверки роли:', e);
+    }
+}
+
+async function getUserRole(userId) {
+    try {
+        const creatorSnap = await database.ref('creator').once('value');
+        if (creatorSnap.exists() && creatorSnap.val() === userId) {
+            return 'creator';
+        }
+        const adminSnap = await database.ref('admins/' + userId).once('value');
+        if (adminSnap.exists()) {
+            return 'admin';
+        }
+        return 'user';
+    } catch(e) {
+        return 'user';
+    }
+}
+
+function getRoleBadge(role) {
+    if (role === 'creator') return '👑 Создатель';
+    if (role === 'admin') return '⭐ Админ';
+    return '';
+}
+
+function getRoleColor(role) {
+    if (role === 'creator') return '#ffd700';
+    if (role === 'admin') return '#00bfff';
+    return '#708499';
+}
+
+async function showAdminPanel() {
+    const panel = document.getElementById('admin-panel');
+    if (!panel) return;
+    
+    if (isAdmin || isCreator) {
+        panel.style.display = 'block';
+        
+        // Обработчики кнопок
+        document.getElementById('btn-ban')?.addEventListener('click', async () => {
+            const userId = document.getElementById('admin-user-id').value.trim();
+            if (!userId) return alert('Введите ID');
+            await banUser(userId, prompt('Причина бана:'));
+        });
+        
+        document.getElementById('btn-unban')?.addEventListener('click', async () => {
+            const userId = document.getElementById('admin-user-id').value.trim();
+            if (!userId) return alert('Введите ID');
+            await unbanUser(userId);
+        });
+        
+        document.getElementById('btn-make-admin')?.addEventListener('click', async () => {
+            const userId = document.getElementById('admin-user-id').value.trim();
+            if (!userId) return alert('Введите ID');
+            await makeAdmin(userId);
+        });
+        
+        document.getElementById('btn-show-users')?.addEventListener('click', async () => {
+            await showUserList();
+        });
+    }
+}
+
+async function banUser(userId, reason) {
+    if (!isAdmin && !isCreator) return alert('❌ Нет прав!');
+    try {
+        await database.ref('banned/' + userId).set({
+            bannedAt: Date.now(),
+            reason: reason || 'Нарушение правил',
+            bannedBy: myId
+        });
+        alert('✅ Пользователь забанен!');
+    } catch(e) {
+        alert('❌ Ошибка бана');
+    }
+}
+
+async function unbanUser(userId) {
+    if (!isAdmin && !isCreator) return alert('❌ Нет прав!');
+    try {
+        await database.ref('banned/' + userId).remove();
+        alert('✅ Пользователь разбанен!');
+    } catch(e) {
+        alert('❌ Ошибка разбана');
+    }
+}
+
+async function makeAdmin(userId) {
+    if (!isCreator) return alert('❌ Только создатель может назначать админов!');
+    try {
+        const snap = await database.ref('users/' + userId).once('value');
+        const user = snap.val();
+        if (!user) return alert('❌ Пользователь не найден');
+        
+        await database.ref('admins/' + userId).set({
+            role: 'admin',
+            name: user.name || 'Без имени',
+            addedAt: Date.now()
+        });
+        alert('✅ Пользователь назначен админом!');
+    } catch(e) {
+        alert('❌ Ошибка');
+    }
+}
+
+async function showUserList() {
+    if (!isAdmin && !isCreator) return alert('❌ Нет прав!');
+    try {
+        const snap = await database.ref('users').once('value');
+        const users = snap.val();
+        const list = document.getElementById('admin-users-list');
+        if (!list) return;
+        
+        let html = '<div style="max-height:200px;overflow-y:auto;">';
+        for (const [id, user] of Object.entries(users || {})) {
+            const role = await getUserRole(id);
+            const badge = getRoleBadge(role);
+            const isBanned = await checkBanned(id);
+            html += `
+                <div style="padding:4px;border-bottom:1px solid #333;display:flex;justify-content:space-between;">
+                    <span>${user.name || 'Без имени'} ${badge}</span>
+                    <span>${isBanned ? '🚫' : '✅'}</span>
+                </div>
+            `;
+        }
+        html += '</div>';
+        list.innerHTML = html;
+    } catch(e) {
+        alert('❌ Ошибка загрузки');
+    }
+}
+
+async function checkBanned(userId) {
+    try {
+        const snap = await database.ref('banned/' + userId).once('value');
+        return snap.exists();
+    } catch(e) {
+        return false;
+    }
+}
+
+// ============================================
+// 3. СООБЩЕНИЯ
+// ============================================
+
+function listenForGlobalMessages() {
+    database.ref('messages/' + myId).on('child_added', (snapshot) => {
+        const data = snapshot.val();
+        const fromId = snapshot.key;
+        
+        console.log('📩 Получено сообщение от:', fromId, data);
+        
+        if (data && data.text) {
+            if (fromId === remoteId) {
+                appendMessage(data.text, 'in');
+                updateLastMessage(remoteId, data.text);
+                const userName = data.name || 'Собеседник';
+                showNotification(`📩 ${userName}: ${data.text.substring(0, 30)}`);
+            }
+            
+            database.ref('users/' + fromId).once('value', (snap) => {
+                const user = snap.val();
+                if (user) {
+                    saveChat(fromId, user.name, user.avatar);
+                }
+            });
+        }
+    });
+}
+
+function showNotification(text) {
+    const notif = document.createElement('div');
+    notif.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #2b5278;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        z-index: 9999;
+        font-size: 14px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        animation: slideIn 0.3s ease;
+        max-width: 300px;
+        cursor: pointer;
+    `;
+    notif.textContent = text;
+    notif.onclick = () => notif.remove();
+    document.body.appendChild(notif);
+    
+    setTimeout(() => {
+        notif.style.opacity = '0';
+        notif.style.transition = 'opacity 0.3s';
+        setTimeout(() => notif.remove(), 300);
+    }, 4000);
+}
+
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from { transform: translateX(100px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+`;
+document.head.appendChild(style);
+
+// ============================================
+// 4. ЧАТЫ
 // ============================================
 
 function loadChats() {
@@ -122,14 +357,14 @@ function loadChats() {
     });
 }
 
-function saveChat(peerId) {
-    database.ref('users/' + peerId).once('value', (snap) => {
-        const user = snap.val();
-        if (user) {
+function saveChat(peerId, name, avatar) {
+    if (!myId || !peerId) return;
+    database.ref('chats/' + myId + '/' + peerId).once('value', (snap) => {
+        if (!snap.exists()) {
             database.ref('chats/' + myId + '/' + peerId).set({
                 peerId: peerId,
-                name: user.name || 'Собеседник',
-                avatar: user.avatar || '',
+                name: name || 'Собеседник',
+                avatar: avatar || '',
                 lastMessage: '',
                 timestamp: Date.now()
             });
@@ -138,6 +373,7 @@ function saveChat(peerId) {
 }
 
 function updateLastMessage(peerId, text) {
+    if (!myId || !peerId) return;
     database.ref('chats/' + myId + '/' + peerId).update({
         lastMessage: text.substring(0, 50),
         timestamp: Date.now()
@@ -145,7 +381,7 @@ function updateLastMessage(peerId, text) {
 }
 
 // ============================================
-// 3. ПОДКЛЮЧЕНИЕ К СОБЕСЕДНИКУ
+// 5. ПОДКЛЮЧЕНИЕ К СОБЕСЕДНИКУ
 // ============================================
 
 btnConnect.addEventListener('click', async () => {
@@ -159,6 +395,16 @@ btnConnect.addEventListener('click', async () => {
         return;
     }
     
+    // Проверяем бан
+    if (await checkBanned(targetId)) {
+        alert('❌ Этот пользователь забанен!');
+        return;
+    }
+    if (await checkBanned(myId)) {
+        alert('❌ Вы забанены!');
+        return;
+    }
+    
     const snap = await database.ref('users/' + targetId).once('value');
     if (!snap.exists()) {
         alert('❌ Пользователь не найден');
@@ -169,12 +415,13 @@ btnConnect.addEventListener('click', async () => {
     isConnected = true;
     
     const user = snap.val();
-    saveChat(targetId);
+    saveChat(targetId, user.name, user.avatar);
     showChatUI(targetId);
-    listenMessages(targetId);
     
     if (chatStatusText) chatStatusText.textContent = 'Онлайн ✅';
     if (statusDot) statusDot.className = 'status-dot online';
+    
+    loadMessageHistory(targetId);
 });
 
 function openChat(peerId) {
@@ -184,8 +431,10 @@ function openChat(peerId) {
     isConnected = true;
     peerIdInput.value = peerId;
     showChatUI(peerId);
-    listenMessages(peerId);
-    btnConnect.click();
+    loadMessageHistory(peerId);
+    
+    if (chatStatusText) chatStatusText.textContent = 'Онлайн ✅';
+    if (statusDot) statusDot.className = 'status-dot online';
 }
 
 function showChatUI(peerId) {
@@ -196,11 +445,31 @@ function showChatUI(peerId) {
     chatAvatar.src = '';
     messagesContainer.innerHTML = '';
     
-    database.ref('users/' + peerId).once('value', (snap) => {
+    database.ref('users/' + peerId).once('value', async (snap) => {
         const user = snap.val();
         if (user) {
             chatName.textContent = user.name || 'Собеседник';
             chatAvatar.src = user.avatar || '';
+            
+            // Добавляем роль
+            const role = await getUserRole(peerId);
+            const badge = getRoleBadge(role);
+            const color = getRoleColor(role);
+            if (badge) {
+                const badgeSpan = document.createElement('span');
+                badgeSpan.className = 'role-badge';
+                badgeSpan.style.cssText = `
+                    color: ${color};
+                    font-size: 11px;
+                    margin-left: 6px;
+                    background: rgba(255,255,255,0.1);
+                    padding: 2px 8px;
+                    border-radius: 10px;
+                    display: inline-block;
+                `;
+                badgeSpan.textContent = badge;
+                chatName.appendChild(badgeSpan);
+            }
         }
     });
     
@@ -210,19 +479,28 @@ function showChatUI(peerId) {
 }
 
 // ============================================
-// 4. СООБЩЕНИЯ
+// 6. ИСТОРИЯ СООБЩЕНИЙ
 // ============================================
 
-function listenMessages(peerId) {
-    // Слушаем сообщения от собеседника
-    database.ref('messages/' + myId + '/' + peerId).on('child_added', (snapshot) => {
+function loadMessageHistory(peerId) {
+    if (messageListener) {
+        messageListener.off();
+        messageListener = null;
+    }
+    
+    messageListener = database.ref('messages/' + myId + '/' + peerId);
+    messageListener.on('child_added', (snapshot) => {
         const data = snapshot.val();
-        if (data && data.from !== myId) {
+        if (data && data.text && data.from !== myId) {
             appendMessage(data.text, 'in');
             updateLastMessage(peerId, data.text);
         }
     });
 }
+
+// ============================================
+// 7. ОТПРАВКА СООБЩЕНИЙ
+// ============================================
 
 btnSend.addEventListener('click', () => {
     const text = messageInput.value.trim();
@@ -235,19 +513,19 @@ btnSend.addEventListener('click', () => {
         return;
     }
     
-    // Сохраняем сообщение для собеседника
     const messageRef = database.ref('messages/' + remoteId + '/' + myId).push();
     messageRef.set({
         from: myId,
         text: text,
+        name: currentUser.displayName || 'Собеседник',
         timestamp: Date.now()
     });
     
-    // Сохраняем для себя
     const myMessageRef = database.ref('messages/' + myId + '/' + remoteId).push();
     myMessageRef.set({
         from: myId,
         text: text,
+        name: currentUser.displayName || 'Собеседник',
         timestamp: Date.now()
     });
     
@@ -261,7 +539,7 @@ messageInput.addEventListener('keypress', (e) => {
 });
 
 // ============================================
-// 5. ОТОБРАЖЕНИЕ
+// 8. ОТОБРАЖЕНИЕ
 // ============================================
 
 function appendMessage(text, dir) {
@@ -269,15 +547,21 @@ function appendMessage(text, dir) {
     div.className = 'message ' + dir;
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     div.innerHTML = `
-        <div>${text}</div>
+        <div>${escapeHTML(text)}</div>
         <div class="message-time">${time}</div>
     `;
     messagesContainer.appendChild(div);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
+function escapeHTML(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
 // ============================================
-// 6. ПРОФИЛЬ
+// 9. ПРОФИЛЬ
 // ============================================
 
 document.getElementById('chat-header-click')?.addEventListener('click', () => {
@@ -303,10 +587,14 @@ async function showProfile(userId) {
     const user = snap.val();
     if (!user) return;
     
+    const role = await getUserRole(userId);
+    const badge = getRoleBadge(role);
+    
     document.getElementById('profile-avatar').src = user.avatar || '';
     document.getElementById('profile-name').textContent = user.name || 'Без имени';
     document.getElementById('profile-id').textContent = 'ID: ' + userId.substring(0, 12);
     document.getElementById('profile-status').textContent = user.online ? '🟢 Онлайн' : '⚫ Офлайн';
+    document.getElementById('profile-role').textContent = badge || 'Пользователь';
     document.getElementById('profile-modal').style.display = 'flex';
 }
 
@@ -320,4 +608,4 @@ document.getElementById('profile-modal')?.addEventListener('click', (e) => {
     }
 });
 
-console.log('✅ App.js загружен! (Firebase Database чат)');
+console.log('✅ App.js загружен! (с ролями)');
