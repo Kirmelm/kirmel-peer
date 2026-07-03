@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KirmelPeer</title>
+    <title>KirmelCrypt</title>
     <link rel="stylesheet" href="style.css">
     
     <!-- Firebase -->
@@ -13,7 +13,7 @@
 </head>
 <body>
 
-    <!-- Экран входа -->
+    <!-- ===== ЭКРАН ВХОДА ===== -->
     <div id="auth-screen">
         <div class="auth-card">
             <h1>🔐 KirmelCrypt</h1>
@@ -23,45 +23,100 @@
         </div>
     </div>
 
-    <!-- Главный экран -->
+    <!-- ===== ГЛАВНЫЙ ЭКРАН ===== -->
     <div id="app-screen" style="display: none;">
         <div class="container">
+            
+            <!-- ===== ЛЕВАЯ ПАНЕЛЬ (Список чатов) ===== -->
             <div class="sidebar">
-                <div class="header">
-                    <h2>🔐 KirmelCrypt</h2>
-                    <div class="user-profile">
+                <div class="sidebar-header">
+                    <div class="app-title">
+                        <span>🔐</span>
+                        <h2>KirmelCrypt</h2>
+                    </div>
+                    
+                    <!-- Профиль пользователя -->
+                    <div class="user-profile" id="my-profile">
                         <img id="my-avatar" class="avatar" src="" alt="">
                         <div class="user-info">
                             <div id="my-name" class="user-name">Загрузка...</div>
                             <div id="my-id-display" class="my-id">ID: генерируется...</div>
                         </div>
                     </div>
+                    
+                    <!-- Подключение -->
                     <div class="connect-box">
-                        <input type="text" id="peer-id-input" class="input-field" placeholder="Введи ID друга">
-                        <button class="btn" id="btn-connect">Подключиться</button>
+                        <div class="connect-label">Новый чат</div>
+                        <div class="connect-input-group">
+                            <input type="text" id="peer-id-input" class="input-field" placeholder="Введите ID собеседника">
+                            <button class="btn btn-connect" id="btn-connect">➕</button>
+                        </div>
                     </div>
                 </div>
-                <div class="chats-list" id="chats-list"></div>
+                
+                <!-- Список чатов -->
+                <div class="chats-list" id="chats-list">
+                    <div class="empty-chats">
+                        <span>💬</span>
+                        <p>Нет активных чатов</p>
+                        <p style="font-size: 12px; color: var(--text-muted);">Введите ID друга чтобы начать</p>
+                    </div>
+                </div>
             </div>
 
-            <div class="main-chat">
+            <!-- ===== ПРАВАЯ ПАНЕЛЬ (Окно чата) ===== -->
+            <div class="main-chat" id="main-chat">
+                <!-- Шапка чата -->
                 <div class="chat-header" id="active-chat-header" style="display: none;">
-                    <img id="chat-avatar" class="avatar" src="" alt="">
-                    <div>
-                        <div id="chat-name" class="user-name">Собеседник</div>
-                        <div class="chat-status">🔒 Защищенное P2P соединение</div>
+                    <div class="chat-header-left" id="chat-header-click" style="cursor: pointer; display: flex; align-items: center; gap: 12px; flex: 1;">
+                        <img id="chat-avatar" class="avatar" src="" alt="">
+                        <div class="chat-header-info">
+                            <div id="chat-name" class="user-name">Собеседник</div>
+                            <div class="chat-status" id="chat-status">
+                                <span class="status-dot"></span>
+                                <span id="chat-status-text">Подключение...</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-header-actions">
+                        <button class="header-btn" id="btn-profile" title="Профиль">👤</button>
+                        <button class="header-btn" id="btn-call" title="Звонок">📞</button>
                     </div>
                 </div>
 
+                <!-- Область сообщений -->
                 <div class="messages-container" id="messages-container">
                     <div class="system-info" id="system-placeholder">
-                        Введите ID друга для начала безопасной сессии
+                        <div class="placeholder-icon">🔐</div>
+                        <h3>Безопасный чат</h3>
+                        <p>Введите ID друга для начала защищенной сессии.<br>Все сообщения шифруются на вашем устройстве.</p>
                     </div>
                 </div>
 
+                <!-- Панель ввода -->
                 <div class="chat-input-area" id="input-area" style="display: none;">
+                    <button class="input-btn" id="btn-emoji" title="Эмодзи">😊</button>
+                    <button class="input-btn" id="btn-attach" title="Прикрепить">📎</button>
                     <input type="text" id="message-input" class="input-field" placeholder="Напишите сообщение...">
-                    <button class="btn" id="btn-send" style="width: auto;">Отправить</button>
+                    <button class="btn btn-send" id="btn-send">➤</button>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <!-- ===== МОДАЛЬНОЕ ОКНО ПРОФИЛЯ ===== -->
+    <div id="profile-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="modal-content">
+            <div class="modal-close" id="profile-modal-close">✕</div>
+            <div class="profile-modal-body">
+                <img id="profile-avatar" class="profile-avatar" src="" alt="">
+                <div id="profile-name" class="profile-name">Имя</div>
+                <div id="profile-id" class="profile-id">ID: ...</div>
+                <div id="profile-status" class="profile-status">Статус</div>
+                <div id="profile-role" class="profile-role">Роль</div>
+                <div class="profile-actions">
+                    <button class="btn" id="profile-chat" style="width: auto; padding: 8px 20px;">💬 Написать</button>
                 </div>
             </div>
         </div>
