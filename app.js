@@ -26,6 +26,7 @@ let remoteId = null;
 let isCaller = false;
 let isConnected = false;
 let isProcessingCall = false;
+let myChats = {}; // Хранит все чаты пользователя
 
 // DOM Элементы
 const authScreen = document.getElementById('auth-screen');
@@ -69,6 +70,7 @@ auth.onAuthStateChanged((user) => {
         initUserMetadata();
         generateUserId();
         showAdminPanel();
+        loadChats(); // ЗАГРУЖАЕМ СОХРАНЕННЫЕ ЧАТЫ
     } else {
         authScreen.style.display = 'flex';
         appScreen.style.display = 'none';
@@ -107,6 +109,104 @@ function generateUserId() {
     
     database.ref('calls/' + myId).remove();
     listenForCalls();
+}
+
+// --- СОХРАНЕНИЕ И ЗАГРУЗКА ЧАТОВ ---
+
+// Сохранить чат в Firebase
+function saveChat(peerId) {
+    if (!myId || !peerId) return;
+    
+    database.ref('users/' + peerId).once('value', (snapshot) => {
+        const user = snapshot.val();
+        if (user) {
+            const chatData = {
+                peerId: peerId,
+                name: user.name || 'Собеседник',
+                avatar: user.avatar || '',
+                lastMessage: '',
+                timestamp: Date.now()
+            };
+            
+            // Сохраняем в список чатов пользователя
+            database.ref('chats/' + myId + '/' + peerId).set(chatData);
+            myChats[peerId] = chatData;
+        }
+    });
+}
+
+// Загрузить сохраненные чаты
+function loadChats() {
+    if (!myId) return;
+    
+    database.ref('chats/' + myId).on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            myChats = data;
+            renderChatsList();
+        } else {
+            // Показываем пустой список
+            showEmptyChats();
+        }
+    });
+}
+
+// Показать список чатов
+function renderChatsList() {
+    const list = document.getElementById('chats-list');
+    list.innerHTML = '';
+    
+    // Сортируем по времени (последние сверху)
+    const sortedChats = Object.values(myChats).sort((a, b) => b.timestamp - a.timestamp);
+    
+    if (sortedChats.length === 0) {
+        showEmptyChats();
+        return;
+    }
+    
+    sortedChats.forEach(chat => {
+        const chatItem = document.createElement('div');
+        chatItem.className = 'chat-item';
+        if (chat.peerId === remoteId) {
+            chatItem.classList.add('active');
+        }
+        chatItem.dataset.id = chat.peerId;
+        chatItem.innerHTML = `
+            <img class="avatar" src="${chat.avatar || ''}" alt="">
+            <div class="user-info">
+                <div class="user-name">${chat.name || 'Собеседник'}</div>
+                <div class="chat-status">${chat.lastMessage || 'Нажмите чтобы открыть'}</div>
+            </div>
+        `;
+        
+        chatItem.addEventListener('click', () => {
+            openChat(chat.peerId);
+        });
+        
+        list.appendChild(chatItem);
+    });
+}
+
+function showEmptyChats() {
+    const list = document.getElementById('chats-list');
+    list.innerHTML = `
+        <div class="empty-chats">
+            <span>💬</span>
+            <p>Нет активных чатов</p>
+            <p style="font-size: 12px; color: var(--text-muted);">Введите ID друга чтобы начать</p>
+        </div>
+    `;
+}
+
+// Обновить последнее сообщение в чате
+function updateLastMessage(peerId, message) {
+    if (!myId || !peerId) return;
+    
+    const chatRef = database.ref('chats/' + myId + '/' + peerId);
+    chatRef.update({
+        lastMessage: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
+        timestamp: Date.now()
+    });
 }
 
 // --- КРИПТОГРАФИЯ ---
@@ -284,6 +384,7 @@ async function handleIncomingCall(callerId, data) {
         console.log('✅ Ответ отправлен');
         
         remoteId = callerId;
+        saveChat(callerId); // СОХРАНЯЕМ ЧАТ
         showChat(callerId);
         
     } catch (e) {
@@ -322,6 +423,7 @@ function setupDataChannel() {
     dataChannel.onopen = () => {
         console.log('✅ Канал данных открыт!');
         isConnected = true;
+        saveChat(remoteId); // СОХРАНЯЕМ ЧАТ ПРИ ПОДКЛЮЧЕНИИ
         renderChatLayout();
         sendHandshake();
     };
@@ -360,10 +462,12 @@ function setupDataChannel() {
                 }
                 const decryptedText = await decryptMessage(data.encrypted, sharedSecretKey);
                 appendMessage(decryptedText, 'in');
+                updateLastMessage(remoteId, decryptedText); // ОБНОВЛЯЕМ ПОСЛЕДНЕЕ СООБЩЕНИЕ
             } else if (data.type === 'IMAGE') {
                 if (!sharedSecretKey) return;
                 const decryptedImage = await decryptMessage(data.encrypted, sharedSecretKey);
                 appendImage(decryptedImage, 'in');
+                updateLastMessage(remoteId, '📷 Изображение');
             }
         } catch (e) {
             console.error('❌ Ошибка обработки сообщения:', e);
@@ -404,6 +508,7 @@ btnConnect.addEventListener('click', async () => {
     
     remoteId = peerId;
     isCaller = true;
+    saveChat(peerId); // СОХРАНЯЕМ ЧАТ
     await startCall(peerId);
 });
 
@@ -472,16 +577,21 @@ function showChat(peerId) {
     activeChatHeader.style.display = 'flex';
     chatName.innerText = 'Подключение...';
     chatAvatar.src = '';
+    inputArea.style.display = 'flex';
     
     database.ref('users/' + peerId).once('value', (snapshot) => {
         const user = snapshot.val();
         if (user) {
             chatName.innerText = user.name || 'Собеседник';
             chatAvatar.src = user.avatar || '';
-            addChatToList(peerId, user.name, user.avatar);
             listenUserStatus(peerId);
         }
     });
+    
+    // Подсвечиваем в списке
+    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+    const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
+    if (item) item.classList.add('active');
 }
 
 function renderChatLayout() {
@@ -494,51 +604,15 @@ function renderChatLayout() {
         if (user) {
             chatName.innerText = user.name || 'Собеседник';
             chatAvatar.src = user.avatar || '';
-            addChatToList(remoteId, user.name, user.avatar);
             listenUserStatus(remoteId);
         }
     });
     
-    const chatItem = document.querySelector(`.chat-item[data-id="${remoteId}"]`);
-    if (chatItem) {
-        chatItem.classList.add('active');
-    }
+    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+    const item = document.querySelector(`.chat-item[data-id="${remoteId}"]`);
+    if (item) item.classList.add('active');
     
     sendHandshake();
-}
-
-function addChatToList(peerId, name, avatar) {
-    const existing = document.querySelector(`.chat-item[data-id="${peerId}"]`);
-    if (existing) return;
-    
-    const chatItem = document.createElement('div');
-    chatItem.className = 'chat-item';
-    chatItem.dataset.id = peerId;
-    chatItem.innerHTML = `
-        <img class="avatar" src="${avatar || ''}" alt="">
-        <div class="user-info">
-            <div class="user-name">${name || 'Собеседник'}</div>
-            <div class="chat-status">Новый чат</div>
-        </div>
-    `;
-    
-    chatItem.addEventListener('click', () => {
-        openChat(peerId);
-    });
-    
-    const list = document.getElementById('chats-list');
-    const empty = list.querySelector('.empty-chats');
-    if (empty) empty.remove();
-    list.appendChild(chatItem);
-}
-
-function openChat(peerId) {
-    if (isConnected && remoteId === peerId) return;
-    remoteId = peerId;
-    showChat(peerId);
-    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-    const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
-    if (item) item.classList.add('active');
 }
 
 function listenUserStatus(userId) {
@@ -597,6 +671,7 @@ async function handleSendMessage() {
             encrypted: encryptedData
         }));
         appendMessage(text, 'out');
+        updateLastMessage(remoteId, text);
         messageInput.value = '';
     } catch (e) {
         console.error('❌ Ошибка отправки:', e);
@@ -646,6 +721,7 @@ async function sendImage(file) {
                     encrypted: encryptedData
                 }));
                 appendImage(imageData, 'out');
+                updateLastMessage(remoteId, '📷 Изображение');
             }
         };
         reader.readAsDataURL(file);
@@ -939,7 +1015,6 @@ function resetChat() {
         database.ref('calls/' + remoteId + '/' + myId).remove();
     }
     
-    chatsList.innerHTML = '';
     activeChatHeader.style.display = 'none';
     inputArea.style.display = 'none';
     systemPlaceholder.style.display = 'block';
@@ -952,4 +1027,4 @@ function escapeHTML(str) {
     return div.innerHTML;
 }
 
-console.log('✅ App.js загружен! (WebRTC с TURN)');
+console.log('✅ App.js загружен! (с сохранением чатов)');
