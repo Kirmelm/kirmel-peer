@@ -19,7 +19,10 @@ const database = firebase.database();
 
 let currentUser = null;
 let myId = null;
-let chatWith = null; // ID собеседника
+let chatWith = null;
+let isAdmin = false;
+let isCreator = false;
+let loadedMessages = new Set();
 
 // DOM
 const authScreen = document.getElementById('auth-screen');
@@ -55,7 +58,7 @@ btnLogin.addEventListener('click', () => {
     });
 });
 
-auth.onAuthStateChanged((user) => {
+auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
         authScreen.style.display = 'none';
@@ -77,8 +80,10 @@ auth.onAuthStateChanged((user) => {
             online: true
         });
         
+        await checkAdminStatus();
         loadChats();
         listenForMessages();
+        showAdminPanel();
         
     } else {
         authScreen.style.display = 'flex';
@@ -87,30 +92,231 @@ auth.onAuthStateChanged((user) => {
 });
 
 // ============================================
-// 2. ПОКАЗ СООБЩЕНИЙ
+// 2. РОЛИ
 // ============================================
 
-function showMessage(text, who) {
+async function checkAdminStatus() {
+    try {
+        const creatorSnap = await database.ref('creator').once('value');
+        if (creatorSnap.exists() && creatorSnap.val() === myId) {
+            isCreator = true;
+            isAdmin = true;
+            console.log('👑 Вы создатель!');
+            return;
+        }
+        const adminSnap = await database.ref('admins/' + myId).once('value');
+        if (adminSnap.exists()) {
+            isAdmin = true;
+            console.log('⭐ Вы админ!');
+        }
+    } catch(e) {
+        console.log('Ошибка проверки роли:', e);
+    }
+}
+
+async function getUserRole(userId) {
+    try {
+        const creatorSnap = await database.ref('creator').once('value');
+        if (creatorSnap.exists() && creatorSnap.val() === userId) {
+            return 'creator';
+        }
+        const adminSnap = await database.ref('admins/' + userId).once('value');
+        if (adminSnap.exists()) {
+            return 'admin';
+        }
+        return 'user';
+    } catch(e) {
+        return 'user';
+    }
+}
+
+function getRoleBadge(role) {
+    if (role === 'creator') return '👑 Создатель';
+    if (role === 'admin') return '⭐ Админ';
+    return '';
+}
+
+function getRoleColor(role) {
+    if (role === 'creator') return '#ffd700';
+    if (role === 'admin') return '#00bfff';
+    return '#708499';
+}
+
+// ============================================
+// 3. АДМИН-ПАНЕЛЬ
+// ============================================
+
+async function showAdminPanel() {
+    const panel = document.getElementById('admin-panel');
+    if (!panel) return;
+    
+    if (isAdmin || isCreator) {
+        panel.style.display = 'block';
+        
+        document.getElementById('btn-ban')?.addEventListener('click', async () => {
+            const userId = document.getElementById('admin-user-id').value.trim();
+            if (!userId) return alert('Введите ID');
+            await banUser(userId, prompt('Причина бана:'));
+        });
+        
+        document.getElementById('btn-unban')?.addEventListener('click', async () => {
+            const userId = document.getElementById('admin-user-id').value.trim();
+            if (!userId) return alert('Введите ID');
+            await unbanUser(userId);
+        });
+        
+        document.getElementById('btn-make-admin')?.addEventListener('click', async () => {
+            const userId = document.getElementById('admin-user-id').value.trim();
+            if (!userId) return alert('Введите ID');
+            await makeAdmin(userId);
+        });
+        
+        document.getElementById('btn-show-users')?.addEventListener('click', async () => {
+            await showUserList();
+        });
+    }
+}
+
+async function banUser(userId, reason) {
+    if (!isAdmin && !isCreator) return alert('❌ Нет прав!');
+    try {
+        await database.ref('banned/' + userId).set({
+            bannedAt: Date.now(),
+            reason: reason || 'Нарушение правил',
+            bannedBy: myId
+        });
+        alert('✅ Пользователь забанен!');
+    } catch(e) {
+        alert('❌ Ошибка бана');
+    }
+}
+
+async function unbanUser(userId) {
+    if (!isAdmin && !isCreator) return alert('❌ Нет прав!');
+    try {
+        await database.ref('banned/' + userId).remove();
+        alert('✅ Пользователь разбанен!');
+    } catch(e) {
+        alert('❌ Ошибка разбана');
+    }
+}
+
+async function makeAdmin(userId) {
+    if (!isCreator) return alert('❌ Только создатель может назначать админов!');
+    try {
+        const snap = await database.ref('users/' + userId).once('value');
+        const user = snap.val();
+        if (!user) return alert('❌ Пользователь не найден');
+        await database.ref('admins/' + userId).set({
+            role: 'admin',
+            name: user.name || 'Без имени',
+            addedAt: Date.now()
+        });
+        alert('✅ Пользователь назначен админом!');
+    } catch(e) {
+        alert('❌ Ошибка');
+    }
+}
+
+async function showUserList() {
+    if (!isAdmin && !isCreator) return alert('❌ Нет прав!');
+    try {
+        const snap = await database.ref('users').once('value');
+        const users = snap.val();
+        const list = document.getElementById('admin-users-list');
+        if (!list) return;
+        
+        let html = '<div style="max-height:200px;overflow-y:auto;">';
+        for (const [id, user] of Object.entries(users || {})) {
+            const role = await getUserRole(id);
+            const badge = getRoleBadge(role);
+            const isBanned = await checkBanned(id);
+            html += `
+                <div style="padding:4px;border-bottom:1px solid #333;display:flex;justify-content:space-between;">
+                    <span>${user.name || 'Без имени'} ${badge}</span>
+                    <span>${isBanned ? '🚫' : '✅'}</span>
+                </div>
+            `;
+        }
+        html += '</div>';
+        list.innerHTML = html;
+    } catch(e) {
+        alert('❌ Ошибка загрузки');
+    }
+}
+
+async function checkBanned(userId) {
+    try {
+        const snap = await database.ref('banned/' + userId).once('value');
+        return snap.exists();
+    } catch(e) {
+        return false;
+    }
+}
+
+// ============================================
+// 4. ПОКАЗ СООБЩЕНИЙ
+// ============================================
+
+function formatDate(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    if (msgDate.getTime() === today.getTime()) return 'Сегодня';
+    if (msgDate.getTime() === yesterday.getTime()) return 'Вчера';
+    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function formatTime(timestamp) {
+    return new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+function addDateSeparator(dateStr) {
     const container = document.getElementById('messages-container');
-    if (!container) {
-        console.error('❌ Нет контейнера!');
-        return;
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = 'date-separator';
+    div.textContent = dateStr;
+    container.appendChild(div);
+}
+
+function showMessage(text, who, timestamp) {
+    const container = document.getElementById('messages-container');
+    if (!container) return;
+    
+    const msgKey = text + timestamp + who;
+    if (loadedMessages.has(msgKey)) return;
+    loadedMessages.add(msgKey);
+    
+    const dateStr = formatDate(timestamp || Date.now());
+    const separators = container.querySelectorAll('.date-separator');
+    let lastSeparator = separators[separators.length - 1];
+    if (!lastSeparator || lastSeparator.textContent !== dateStr) {
+        addDateSeparator(dateStr);
     }
     
     const div = document.createElement('div');
     div.className = 'message ' + who;
-    const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const timeStr = formatTime(timestamp || Date.now());
     div.innerHTML = `
-        <div>${text}</div>
-        <div class="message-time">${time}</div>
+        <div>${escapeHTML(text)}</div>
+        <div class="message-time">${timeStr}</div>
     `;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
-    console.log('✅ Показано сообщение:', text);
+}
+
+function escapeHTML(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
 }
 
 // ============================================
-// 3. СЛУШАТЕЛЬ СООБЩЕНИЙ
+// 5. СЛУШАТЕЛЬ СООБЩЕНИЙ
 // ============================================
 
 function listenForMessages() {
@@ -120,32 +326,18 @@ function listenForMessages() {
         const data = snapshot.val();
         const fromId = snapshot.key;
         
-        console.log('📩 Пришло сообщение!');
-        console.log('📩 От кого:', fromId);
-        console.log('📩 Текст:', data ? data.text : 'нет текста');
-        console.log('📩 Открыт чат с:', chatWith);
-        
         if (!data || !data.text) return;
+        if (data.from === myId) return;
         
-        // Если это сообщение от меня - игнорируем
-        if (data.from === myId) {
-            console.log('📩 Это моё сообщение');
-            return;
-        }
+        console.log('📩 Сообщение от:', fromId, 'текст:', data.text);
         
-        // Показываем если чат открыт с этим человеком
         if (chatWith && chatWith === fromId) {
             console.log('📩 ПОКАЗЫВАЕМ В ЧАТЕ!');
-            showMessage(data.text, 'in');
+            showMessage(data.text, 'in', data.timestamp || Date.now());
             updateLastMessage(fromId, data.text);
-            
-            // Уведомление
             showNotification(`📩 ${data.name || 'Собеседник'}: ${data.text.substring(0, 30)}`);
-        } else {
-            console.log('📩 Чат не открыт с этим человеком');
         }
         
-        // Сохраняем чат в списке
         database.ref('users/' + fromId).once('value', (snap) => {
             const user = snap.val();
             if (user) {
@@ -179,17 +371,25 @@ style.textContent = `
         from { transform: translateX(100px); opacity: 0; }
         to { transform: translateX(0); opacity: 1; }
     }
+    .date-separator {
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 12px;
+        padding: 8px 0;
+        margin: 4px 0;
+    }
 `;
 document.head.appendChild(style);
 
 // ============================================
-// 4. ИСТОРИЯ
+// 6. ИСТОРИЯ
 // ============================================
 
 function loadHistory(peerId) {
     const container = document.getElementById('messages-container');
     if (!container) return;
     container.innerHTML = '';
+    loadedMessages.clear();
     chatWith = peerId;
     
     console.log('📚 Загружаем историю с:', peerId);
@@ -198,21 +398,34 @@ function loadHistory(peerId) {
         const data = snapshot.val();
         if (data) {
             const messages = Object.values(data).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+            let lastDate = '';
             messages.forEach(msg => {
                 if (msg && msg.text) {
                     const who = msg.from === myId ? 'out' : 'in';
-                    showMessage(msg.text, who);
+                    const dateStr = formatDate(msg.timestamp || Date.now());
+                    if (dateStr !== lastDate) {
+                        addDateSeparator(dateStr);
+                        lastDate = dateStr;
+                    }
+                    const div = document.createElement('div');
+                    div.className = 'message ' + who;
+                    div.innerHTML = `
+                        <div>${escapeHTML(msg.text)}</div>
+                        <div class="message-time">${formatTime(msg.timestamp || Date.now())}</div>
+                    `;
+                    container.appendChild(div);
+                    const msgKey = msg.text + (msg.timestamp || Date.now()) + who;
+                    loadedMessages.add(msgKey);
                 }
             });
             console.log(`📚 Загружено ${messages.length} сообщений`);
-        } else {
-            console.log('📭 Нет истории');
+            container.scrollTop = container.scrollHeight;
         }
     });
 }
 
 // ============================================
-// 5. ЧАТЫ
+// 7. ЧАТЫ
 // ============================================
 
 function loadChats() {
@@ -269,7 +482,7 @@ function updateLastMessage(peerId, text) {
 }
 
 // ============================================
-// 6. ОТКРЫТИЕ ЧАТА
+// 8. ОТКРЫТИЕ ЧАТА
 // ============================================
 
 function openChat(peerId) {
@@ -283,11 +496,30 @@ function openChat(peerId) {
     if (chatName) chatName.textContent = 'Загрузка...';
     if (chatAvatar) chatAvatar.src = '';
     
-    database.ref('users/' + peerId).once('value', (snap) => {
+    database.ref('users/' + peerId).once('value', async (snap) => {
         const user = snap.val();
         if (user && chatName) {
             chatName.textContent = user.name || 'Собеседник';
             if (chatAvatar) chatAvatar.src = user.avatar || '';
+            
+            const role = await getUserRole(peerId);
+            const badge = getRoleBadge(role);
+            const color = getRoleColor(role);
+            if (badge) {
+                const badgeSpan = document.createElement('span');
+                badgeSpan.className = 'role-badge';
+                badgeSpan.style.cssText = `
+                    color: ${color};
+                    font-size: 11px;
+                    margin-left: 6px;
+                    background: rgba(255,255,255,0.1);
+                    padding: 2px 8px;
+                    border-radius: 10px;
+                    display: inline-block;
+                `;
+                badgeSpan.textContent = badge;
+                chatName.appendChild(badgeSpan);
+            }
         }
     });
     
@@ -306,6 +538,15 @@ btnConnect.addEventListener('click', async () => {
     if (!targetId) { alert('❌ Введите ID'); return; }
     if (targetId === myId) { alert('❌ Нельзя к себе'); return; }
     
+    if (await checkBanned(targetId)) {
+        alert('❌ Этот пользователь забанен!');
+        return;
+    }
+    if (await checkBanned(myId)) {
+        alert('❌ Вы забанены!');
+        return;
+    }
+    
     const snap = await database.ref('users/' + targetId).once('value');
     if (!snap.exists()) { alert('❌ Пользователь не найден'); return; }
     
@@ -315,7 +556,7 @@ btnConnect.addEventListener('click', async () => {
 });
 
 // ============================================
-// 7. ОТПРАВКА
+// 9. ОТПРАВКА
 // ============================================
 
 btnSend.addEventListener('click', () => {
@@ -327,7 +568,6 @@ btnSend.addEventListener('click', () => {
     
     console.log('📤 Отправка:', text, 'кому:', chatWith);
     
-    // Отправляем собеседнику
     database.ref('messages/' + chatWith + '/' + myId).push().set({
         from: myId,
         text: text,
@@ -335,7 +575,6 @@ btnSend.addEventListener('click', () => {
         timestamp: timestamp
     });
     
-    // Сохраняем у себя
     database.ref('messages/' + myId + '/' + chatWith).push().set({
         from: myId,
         text: text,
@@ -343,7 +582,7 @@ btnSend.addEventListener('click', () => {
         timestamp: timestamp
     });
     
-    showMessage(text, 'out');
+    showMessage(text, 'out', timestamp);
     updateLastMessage(chatWith, text);
     messageInput.value = '';
 });
@@ -353,7 +592,7 @@ messageInput.addEventListener('keypress', (e) => {
 });
 
 // ============================================
-// 8. ПРОФИЛЬ
+// 10. ПРОФИЛЬ
 // ============================================
 
 document.getElementById('chat-header-click')?.addEventListener('click', () => {
@@ -378,10 +617,15 @@ async function showProfile(userId) {
     const snap = await database.ref('users/' + userId).once('value');
     const user = snap.val();
     if (!user) return;
+    
+    const role = await getUserRole(userId);
+    const badge = getRoleBadge(role);
+    
     document.getElementById('profile-avatar').src = user.avatar || '';
     document.getElementById('profile-name').textContent = user.name || 'Без имени';
     document.getElementById('profile-id').textContent = 'ID: ' + userId.substring(0, 12);
     document.getElementById('profile-status').textContent = user.online ? '🟢 Онлайн' : '⚫ Офлайн';
+    document.getElementById('profile-role').textContent = badge || 'Пользователь';
     document.getElementById('profile-modal').style.display = 'flex';
 }
 
@@ -395,4 +639,4 @@ document.getElementById('profile-modal')?.addEventListener('click', (e) => {
     }
 });
 
-console.log('✅ App.js загружен! (ПРОСТАЯ ВЕРСИЯ)');
+console.log('✅ App.js загружен! (ПОЛНАЯ ВЕРСИЯ)');
