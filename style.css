@@ -7,7 +7,7 @@
     --accent: #5288c1;
     --accent-hover: #649ad4;
     --bubble-out: #2b5278;
-    --bubble-in: #182533;
+    --bubble-in: #1a2a3a;
     --border: #101921;
 }
 
@@ -26,7 +26,7 @@ body, html {
     overflow: hidden;
 }
 
-/* Экран авторизации */
+/* ЭКРАН ВХОДА */
 #auth-screen {
     display: flex;
     flex-direction: column;
@@ -80,7 +80,7 @@ body, html {
     display: none;
 }
 
-/* Главный экран */
+/* ГЛАВНЫЙ ЭКРАН */
 #app-screen {
     display: none;
     height: 100vh;
@@ -92,7 +92,7 @@ body, html {
     height: 100%;
 }
 
-/* Левая панель */
+/* ЛЕВАЯ ПАНЕЛЬ */
 .sidebar {
     width: 320px;
     background-color: var(--bg-sidebar);
@@ -214,7 +214,7 @@ body, html {
     border-color: var(--accent);
 }
 
-/* Список чатов */
+/* СПИСОК ЧАТОВ */
 .chats-list {
     flex: 1;
     overflow-y: auto;
@@ -272,7 +272,7 @@ body, html {
     margin-bottom: 12px;
 }
 
-/* Правая панель */
+/* ПРАВАЯ ПАНЕЛЬ */
 .main-chat {
     flex: 1;
     display: flex;
@@ -360,14 +360,15 @@ body, html {
     color: var(--text-main);
 }
 
-/* Сообщения */
+/* ===== СООБЩЕНИЯ (ГЛАВНОЕ!) ===== */
 .messages-container {
     flex: 1;
     padding: 16px 20px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
+    background: var(--bg-main);
 }
 
 .message {
@@ -377,36 +378,38 @@ body, html {
     font-size: 14px;
     line-height: 1.4;
     word-wrap: break-word;
-    position: relative;
     margin-bottom: 2px;
 }
 
 .message.out {
-    background: var(--bubble-out);
+    background: #2b5278;
     align-self: flex-end;
     border-bottom-right-radius: 4px;
+    color: #ffffff;
 }
 
 .message.in {
-    background: var(--bubble-in);
+    background: #1a2a3a;
     align-self: flex-start;
     border-bottom-left-radius: 4px;
-    border: 1px solid var(--border);
+    border: 1px solid #2a3a4a;
+    color: #f5f5f5;
 }
 
-.message .message-time {
+.message-time {
     font-size: 10px;
-    color: var(--text-muted);
+    color: #708499;
     text-align: right;
     margin-top: 4px;
 }
 
-.message .message-image {
-    max-width: 200px;
-    max-height: 200px;
-    border-radius: 8px;
-    margin: 4px 0;
-    cursor: pointer;
+.date-separator {
+    text-align: center;
+    color: #708499;
+    font-size: 12px;
+    padding: 12px 0 8px 0;
+    font-weight: 500;
+    width: 100%;
 }
 
 .system-info {
@@ -431,7 +434,7 @@ body, html {
     line-height: 1.6;
 }
 
-/* Панель ввода */
+/* ПАНЕЛЬ ВВОДА */
 .chat-input-area {
     padding: 12px 16px;
     background: var(--bg-sidebar);
@@ -493,7 +496,7 @@ body, html {
     background: var(--accent-hover);
 }
 
-/* Модальное окно */
+/* МОДАЛЬНОЕ ОКНО */
 #profile-modal {
     display: none;
     position: fixed;
@@ -573,7 +576,7 @@ body, html {
     gap: 8px;
 }
 
-/* Роли */
+/* РОЛИ */
 .role-badge {
     font-size: 10px;
     padding: 2px 8px;
@@ -592,7 +595,7 @@ body, html {
     background: rgba(0, 191, 255, 0.15);
 }
 
-/* Адаптив */
+/* АДАПТИВ */
 @media (max-width: 768px) {
     .sidebar {
         width: 100%;
