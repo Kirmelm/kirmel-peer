@@ -22,8 +22,10 @@ let myId = null;
 let remoteId = null;
 let isConnected = false;
 let messageListener = null;
+let isAdmin = false;
+let isCreator = false;
 
-// DOM
+// DOM (получаем элементы ОДИН РАЗ)
 const authScreen = document.getElementById('auth-screen');
 const appScreen = document.getElementById('app-screen');
 const btnLogin = document.getElementById('btn-login');
@@ -81,7 +83,7 @@ auth.onAuthStateChanged(async (user) => {
         
         loadChats();
         listenForGlobalMessages();
-        checkAdminStatus();
+        await checkAdminStatus();
         showAdminPanel();
         
     } else {
@@ -91,23 +93,333 @@ auth.onAuthStateChanged(async (user) => {
 });
 
 // ============================================
-// 2. РОЛИ И АДМИНКА
+// 2. ГЛОБАЛЬНЫЙ СЛУШАТЕЛЬ СООБЩЕНИЙ
 // ============================================
 
-let isAdmin = false;
-let isCreator = false;
+function listenForGlobalMessages() {
+    database.ref('messages/' + myId).on('child_added', (snapshot) => {
+        const data = snapshot.val();
+        const fromId = snapshot.key;
+        
+        console.log('📩 Получено сообщение от:', fromId, data);
+        
+        if (data && data.text) {
+            // Показываем в чате если это наш собеседник
+            if (fromId === remoteId) {
+                console.log('✅ Показываем сообщение в чате:', data.text);
+                appendMessage(data.text, 'in');
+                updateLastMessage(remoteId, data.text);
+                showNotification(`📩 ${data.name || 'Собеседник'}: ${data.text.substring(0, 30)}`);
+            }
+            
+            // Сохраняем чат если его нет
+            database.ref('users/' + fromId).once('value', (snap) => {
+                const user = snap.val();
+                if (user) {
+                    saveChat(fromId, user.name, user.avatar);
+                }
+            });
+        }
+    });
+}
+
+function showNotification(text) {
+    const notif = document.createElement('div');
+    notif.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #2b5278;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        z-index: 9999;
+        font-size: 14px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        animation: slideIn 0.3s ease;
+        max-width: 300px;
+        cursor: pointer;
+    `;
+    notif.textContent = text;
+    notif.onclick = () => notif.remove();
+    document.body.appendChild(notif);
+    
+    setTimeout(() => {
+        notif.style.opacity = '0';
+        notif.style.transition = 'opacity 0.3s';
+        setTimeout(() => notif.remove(), 300);
+    }, 4000);
+}
+
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from { transform: translateX(100px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+`;
+document.head.appendChild(style);
+
+// ============================================
+// 3. ОТОБРАЖЕНИЕ СООБЩЕНИЙ (ФИКС)
+// ============================================
+
+function appendMessage(text, dir) {
+    // Получаем актуальный контейнер
+    const container = document.getElementById('messages-container');
+    if (!container) {
+        console.error('❌ messages-container не найден!');
+        return;
+    }
+    
+    const div = document.createElement('div');
+    div.className = 'message ' + dir;
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    div.innerHTML = `
+        <div>${escapeHTML(text)}</div>
+        <div class="message-time">${time}</div>
+    `;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    console.log('✅ Сообщение добавлено в чат:', text);
+}
+
+function escapeHTML(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+// ============================================
+// 4. ЧАТЫ
+// ============================================
+
+function loadChats() {
+    database.ref('chats/' + myId).on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (!chatsList) return;
+        chatsList.innerHTML = '';
+        
+        if (!data) {
+            chatsList.innerHTML = `
+                <div class="empty-chats">
+                    <span>💬</span>
+                    <p>Нет активных чатов</p>
+                </div>
+            `;
+            return;
+        }
+        
+        const sorted = Object.values(data).sort((a, b) => b.timestamp - a.timestamp);
+        sorted.forEach(chat => {
+            const div = document.createElement('div');
+            div.className = 'chat-item';
+            div.dataset.id = chat.peerId;
+            div.innerHTML = `
+                <img class="avatar" src="${chat.avatar || ''}">
+                <div class="user-info">
+                    <div class="user-name">${chat.name}</div>
+                    <div class="chat-status">${chat.lastMessage || 'Новый чат'}</div>
+                </div>
+            `;
+            div.onclick = () => openChat(chat.peerId);
+            chatsList.appendChild(div);
+        });
+    });
+}
+
+function saveChat(peerId, name, avatar) {
+    if (!myId || !peerId) return;
+    database.ref('chats/' + myId + '/' + peerId).once('value', (snap) => {
+        if (!snap.exists()) {
+            database.ref('chats/' + myId + '/' + peerId).set({
+                peerId: peerId,
+                name: name || 'Собеседник',
+                avatar: avatar || '',
+                lastMessage: '',
+                timestamp: Date.now()
+            });
+        }
+    });
+}
+
+function updateLastMessage(peerId, text) {
+    if (!myId || !peerId) return;
+    database.ref('chats/' + myId + '/' + peerId).update({
+        lastMessage: text.substring(0, 50),
+        timestamp: Date.now()
+    });
+}
+
+// ============================================
+// 5. ПОДКЛЮЧЕНИЕ
+// ============================================
+
+btnConnect.addEventListener('click', async () => {
+    const targetId = peerIdInput.value.trim();
+    if (!targetId) {
+        alert('❌ Введите ID');
+        return;
+    }
+    if (targetId === myId) {
+        alert('❌ Нельзя к себе');
+        return;
+    }
+    
+    if (await checkBanned(targetId)) {
+        alert('❌ Этот пользователь забанен!');
+        return;
+    }
+    if (await checkBanned(myId)) {
+        alert('❌ Вы забанены!');
+        return;
+    }
+    
+    const snap = await database.ref('users/' + targetId).once('value');
+    if (!snap.exists()) {
+        alert('❌ Пользователь не найден');
+        return;
+    }
+    
+    remoteId = targetId;
+    isConnected = true;
+    
+    const user = snap.val();
+    saveChat(targetId, user.name, user.avatar);
+    showChatUI(targetId);
+    
+    if (chatStatusText) chatStatusText.textContent = 'Онлайн ✅';
+    if (statusDot) statusDot.className = 'status-dot online';
+    
+    loadMessageHistory(targetId);
+});
+
+function openChat(peerId) {
+    if (isConnected && remoteId === peerId) return;
+    
+    remoteId = peerId;
+    isConnected = true;
+    peerIdInput.value = peerId;
+    showChatUI(peerId);
+    loadMessageHistory(peerId);
+    
+    if (chatStatusText) chatStatusText.textContent = 'Онлайн ✅';
+    if (statusDot) statusDot.className = 'status-dot online';
+}
+
+function showChatUI(peerId) {
+    if (systemPlaceholder) systemPlaceholder.style.display = 'none';
+    if (activeChatHeader) activeChatHeader.style.display = 'flex';
+    if (inputArea) inputArea.style.display = 'flex';
+    if (chatName) chatName.textContent = 'Подключение...';
+    if (chatAvatar) chatAvatar.src = '';
+    
+    // Очищаем сообщения
+    if (messagesContainer) {
+        messagesContainer.innerHTML = '';
+    }
+    
+    database.ref('users/' + peerId).once('value', async (snap) => {
+        const user = snap.val();
+        if (user && chatName) {
+            chatName.textContent = user.name || 'Собеседник';
+            if (chatAvatar) chatAvatar.src = user.avatar || '';
+            
+            const role = await getUserRole(peerId);
+            const badge = getRoleBadge(role);
+            const color = getRoleColor(role);
+            if (badge) {
+                const badgeSpan = document.createElement('span');
+                badgeSpan.className = 'role-badge';
+                badgeSpan.style.cssText = `
+                    color: ${color};
+                    font-size: 11px;
+                    margin-left: 6px;
+                    background: rgba(255,255,255,0.1);
+                    padding: 2px 8px;
+                    border-radius: 10px;
+                    display: inline-block;
+                `;
+                badgeSpan.textContent = badge;
+                chatName.appendChild(badgeSpan);
+            }
+        }
+    });
+    
+    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+    const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
+    if (item) item.classList.add('active');
+}
+
+function loadMessageHistory(peerId) {
+    if (messageListener) {
+        messageListener.off();
+        messageListener = null;
+    }
+    
+    messageListener = database.ref('messages/' + myId + '/' + peerId);
+    messageListener.on('child_added', (snapshot) => {
+        const data = snapshot.val();
+        if (data && data.text && data.from !== myId) {
+            console.log('📩 История: сообщение от', data.from, data.text);
+            appendMessage(data.text, 'in');
+            updateLastMessage(peerId, data.text);
+        }
+    });
+}
+
+// ============================================
+// 6. ОТПРАВКА
+// ============================================
+
+btnSend.addEventListener('click', () => {
+    const text = messageInput.value.trim();
+    if (!text) {
+        alert('❌ Введите сообщение');
+        return;
+    }
+    if (!remoteId) {
+        alert('❌ Нет собеседника');
+        return;
+    }
+    
+    // Отправляем собеседнику
+    database.ref('messages/' + remoteId + '/' + myId).push().set({
+        from: myId,
+        text: text,
+        name: currentUser.displayName || 'Собеседник',
+        timestamp: Date.now()
+    });
+    
+    // Сохраняем у себя
+    database.ref('messages/' + myId + '/' + remoteId).push().set({
+        from: myId,
+        text: text,
+        name: currentUser.displayName || 'Собеседник',
+        timestamp: Date.now()
+    });
+    
+    appendMessage(text, 'out');
+    updateLastMessage(remoteId, text);
+    messageInput.value = '';
+});
+
+messageInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') btnSend.click();
+});
+
+// ============================================
+// 7. РОЛИ
+// ============================================
 
 async function checkAdminStatus() {
     try {
-        // Проверяем создатель
         const creatorSnap = await database.ref('creator').once('value');
         if (creatorSnap.exists() && creatorSnap.val() === myId) {
             isCreator = true;
             isAdmin = true;
             return;
         }
-        
-        // Проверяем админ
         const adminSnap = await database.ref('admins/' + myId).once('value');
         if (adminSnap.exists()) {
             isAdmin = true;
@@ -152,7 +464,6 @@ async function showAdminPanel() {
     if (isAdmin || isCreator) {
         panel.style.display = 'block';
         
-        // Обработчики кнопок
         document.getElementById('btn-ban')?.addEventListener('click', async () => {
             const userId = document.getElementById('admin-user-id').value.trim();
             if (!userId) return alert('Введите ID');
@@ -207,7 +518,6 @@ async function makeAdmin(userId) {
         const snap = await database.ref('users/' + userId).once('value');
         const user = snap.val();
         if (!user) return alert('❌ Пользователь не найден');
-        
         await database.ref('admins/' + userId).set({
             role: 'admin',
             name: user.name || 'Без имени',
@@ -256,312 +566,7 @@ async function checkBanned(userId) {
 }
 
 // ============================================
-// 3. СООБЩЕНИЯ
-// ============================================
-
-function listenForGlobalMessages() {
-    database.ref('messages/' + myId).on('child_added', (snapshot) => {
-        const data = snapshot.val();
-        const fromId = snapshot.key;
-        
-        console.log('📩 Получено сообщение от:', fromId, data);
-        
-        if (data && data.text) {
-            if (fromId === remoteId) {
-                appendMessage(data.text, 'in');
-                updateLastMessage(remoteId, data.text);
-                const userName = data.name || 'Собеседник';
-                showNotification(`📩 ${userName}: ${data.text.substring(0, 30)}`);
-            }
-            
-            database.ref('users/' + fromId).once('value', (snap) => {
-                const user = snap.val();
-                if (user) {
-                    saveChat(fromId, user.name, user.avatar);
-                }
-            });
-        }
-    });
-}
-
-function showNotification(text) {
-    const notif = document.createElement('div');
-    notif.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #2b5278;
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        z-index: 9999;
-        font-size: 14px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        animation: slideIn 0.3s ease;
-        max-width: 300px;
-        cursor: pointer;
-    `;
-    notif.textContent = text;
-    notif.onclick = () => notif.remove();
-    document.body.appendChild(notif);
-    
-    setTimeout(() => {
-        notif.style.opacity = '0';
-        notif.style.transition = 'opacity 0.3s';
-        setTimeout(() => notif.remove(), 300);
-    }, 4000);
-}
-
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideIn {
-        from { transform: translateX(100px); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-`;
-document.head.appendChild(style);
-
-// ============================================
-// 4. ЧАТЫ
-// ============================================
-
-function loadChats() {
-    database.ref('chats/' + myId).on('value', (snapshot) => {
-        const data = snapshot.val();
-        chatsList.innerHTML = '';
-        if (!data) {
-            chatsList.innerHTML = `
-                <div class="empty-chats">
-                    <span>💬</span>
-                    <p>Нет активных чатов</p>
-                </div>
-            `;
-            return;
-        }
-        
-        const sorted = Object.values(data).sort((a, b) => b.timestamp - a.timestamp);
-        sorted.forEach(chat => {
-            const div = document.createElement('div');
-            div.className = 'chat-item';
-            div.dataset.id = chat.peerId;
-            div.innerHTML = `
-                <img class="avatar" src="${chat.avatar || ''}">
-                <div class="user-info">
-                    <div class="user-name">${chat.name}</div>
-                    <div class="chat-status">${chat.lastMessage || 'Новый чат'}</div>
-                </div>
-            `;
-            div.onclick = () => openChat(chat.peerId);
-            chatsList.appendChild(div);
-        });
-    });
-}
-
-function saveChat(peerId, name, avatar) {
-    if (!myId || !peerId) return;
-    database.ref('chats/' + myId + '/' + peerId).once('value', (snap) => {
-        if (!snap.exists()) {
-            database.ref('chats/' + myId + '/' + peerId).set({
-                peerId: peerId,
-                name: name || 'Собеседник',
-                avatar: avatar || '',
-                lastMessage: '',
-                timestamp: Date.now()
-            });
-        }
-    });
-}
-
-function updateLastMessage(peerId, text) {
-    if (!myId || !peerId) return;
-    database.ref('chats/' + myId + '/' + peerId).update({
-        lastMessage: text.substring(0, 50),
-        timestamp: Date.now()
-    });
-}
-
-// ============================================
-// 5. ПОДКЛЮЧЕНИЕ К СОБЕСЕДНИКУ
-// ============================================
-
-btnConnect.addEventListener('click', async () => {
-    const targetId = peerIdInput.value.trim();
-    if (!targetId) {
-        alert('❌ Введите ID');
-        return;
-    }
-    if (targetId === myId) {
-        alert('❌ Нельзя к себе');
-        return;
-    }
-    
-    // Проверяем бан
-    if (await checkBanned(targetId)) {
-        alert('❌ Этот пользователь забанен!');
-        return;
-    }
-    if (await checkBanned(myId)) {
-        alert('❌ Вы забанены!');
-        return;
-    }
-    
-    const snap = await database.ref('users/' + targetId).once('value');
-    if (!snap.exists()) {
-        alert('❌ Пользователь не найден');
-        return;
-    }
-    
-    remoteId = targetId;
-    isConnected = true;
-    
-    const user = snap.val();
-    saveChat(targetId, user.name, user.avatar);
-    showChatUI(targetId);
-    
-    if (chatStatusText) chatStatusText.textContent = 'Онлайн ✅';
-    if (statusDot) statusDot.className = 'status-dot online';
-    
-    loadMessageHistory(targetId);
-});
-
-function openChat(peerId) {
-    if (isConnected && remoteId === peerId) return;
-    
-    remoteId = peerId;
-    isConnected = true;
-    peerIdInput.value = peerId;
-    showChatUI(peerId);
-    loadMessageHistory(peerId);
-    
-    if (chatStatusText) chatStatusText.textContent = 'Онлайн ✅';
-    if (statusDot) statusDot.className = 'status-dot online';
-}
-
-function showChatUI(peerId) {
-    systemPlaceholder.style.display = 'none';
-    activeChatHeader.style.display = 'flex';
-    inputArea.style.display = 'flex';
-    chatName.textContent = 'Подключение...';
-    chatAvatar.src = '';
-    messagesContainer.innerHTML = '';
-    
-    database.ref('users/' + peerId).once('value', async (snap) => {
-        const user = snap.val();
-        if (user) {
-            chatName.textContent = user.name || 'Собеседник';
-            chatAvatar.src = user.avatar || '';
-            
-            // Добавляем роль
-            const role = await getUserRole(peerId);
-            const badge = getRoleBadge(role);
-            const color = getRoleColor(role);
-            if (badge) {
-                const badgeSpan = document.createElement('span');
-                badgeSpan.className = 'role-badge';
-                badgeSpan.style.cssText = `
-                    color: ${color};
-                    font-size: 11px;
-                    margin-left: 6px;
-                    background: rgba(255,255,255,0.1);
-                    padding: 2px 8px;
-                    border-radius: 10px;
-                    display: inline-block;
-                `;
-                badgeSpan.textContent = badge;
-                chatName.appendChild(badgeSpan);
-            }
-        }
-    });
-    
-    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-    const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
-    if (item) item.classList.add('active');
-}
-
-// ============================================
-// 6. ИСТОРИЯ СООБЩЕНИЙ
-// ============================================
-
-function loadMessageHistory(peerId) {
-    if (messageListener) {
-        messageListener.off();
-        messageListener = null;
-    }
-    
-    messageListener = database.ref('messages/' + myId + '/' + peerId);
-    messageListener.on('child_added', (snapshot) => {
-        const data = snapshot.val();
-        if (data && data.text && data.from !== myId) {
-            appendMessage(data.text, 'in');
-            updateLastMessage(peerId, data.text);
-        }
-    });
-}
-
-// ============================================
-// 7. ОТПРАВКА СООБЩЕНИЙ
-// ============================================
-
-btnSend.addEventListener('click', () => {
-    const text = messageInput.value.trim();
-    if (!text) {
-        alert('❌ Введите сообщение');
-        return;
-    }
-    if (!remoteId) {
-        alert('❌ Нет собеседника');
-        return;
-    }
-    
-    const messageRef = database.ref('messages/' + remoteId + '/' + myId).push();
-    messageRef.set({
-        from: myId,
-        text: text,
-        name: currentUser.displayName || 'Собеседник',
-        timestamp: Date.now()
-    });
-    
-    const myMessageRef = database.ref('messages/' + myId + '/' + remoteId).push();
-    myMessageRef.set({
-        from: myId,
-        text: text,
-        name: currentUser.displayName || 'Собеседник',
-        timestamp: Date.now()
-    });
-    
-    appendMessage(text, 'out');
-    updateLastMessage(remoteId, text);
-    messageInput.value = '';
-});
-
-messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') btnSend.click();
-});
-
-// ============================================
-// 8. ОТОБРАЖЕНИЕ
-// ============================================
-
-function appendMessage(text, dir) {
-    const div = document.createElement('div');
-    div.className = 'message ' + dir;
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    div.innerHTML = `
-        <div>${escapeHTML(text)}</div>
-        <div class="message-time">${time}</div>
-    `;
-    messagesContainer.appendChild(div);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
-
-function escapeHTML(str) {
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
-}
-
-// ============================================
-// 9. ПРОФИЛЬ
+// 8. ПРОФИЛЬ
 // ============================================
 
 document.getElementById('chat-header-click')?.addEventListener('click', () => {
