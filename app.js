@@ -43,6 +43,8 @@ const chatsList = document.getElementById('chats-list');
 const activeChatHeader = document.getElementById('active-chat-header');
 const chatAvatar = document.getElementById('chat-avatar');
 const chatName = document.getElementById('chat-name');
+const chatStatusText = document.getElementById('chat-status-text');
+const statusDot = document.querySelector('.status-dot');
 const messagesContainer = document.getElementById('messages-container');
 const systemPlaceholder = document.getElementById('system-placeholder');
 const inputArea = document.getElementById('input-area');
@@ -66,6 +68,7 @@ auth.onAuthStateChanged((user) => {
         appScreen.style.display = 'block';
         initUserMetadata();
         generateUserId();
+        showAdminPanel();
     } else {
         authScreen.style.display = 'flex';
         appScreen.style.display = 'none';
@@ -99,13 +102,10 @@ function generateUserId() {
         if (myPeerConnection) {
             myPeerConnection.close();
         }
-        // Очищаем вызовы
         database.ref('calls/' + myId).remove();
     });
     
-    // Очищаем старые вызовы при старте
     database.ref('calls/' + myId).remove();
-    
     listenForCalls();
 }
 
@@ -179,24 +179,17 @@ async function decryptMessage(encryptedObj, key) {
     }
 }
 
-// --- WEBRTC С TURN СЕРВЕРОМ ---
+// --- WEBRTC ---
 
-// Бесплатный TURN сервер от Google (ограниченный, но работает)
 const rtcConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
         { urls: 'stun:stun2.l.google.com:19302' },
-        // TURN сервер (нужен когда STUN не работает)
         {
             urls: 'turn:turn.anyfirewall.com:443?transport=tcp',
             username: 'webrtc',
             credential: 'webrtc'
-        },
-        {
-            urls: 'turn:turnserver.com:3478',
-            username: 'user',
-            credential: 'pass'
         }
     ],
     iceCandidatePoolSize: 10,
@@ -211,10 +204,7 @@ async function listenForCalls() {
         const callerId = snapshot.key;
         
         if (!data || !data.type || callerId === myId) return;
-        if (isConnected) {
-            // Если уже есть соединение, отклоняем
-            return;
-        }
+        if (isConnected) return;
         
         console.log('📞 Входящий вызов от:', callerId, 'тип:', data.type);
         
@@ -253,14 +243,12 @@ async function handleIncomingCall(callerId, data) {
         
         myPeerConnection = new RTCPeerConnection(rtcConfig);
         
-        // Обработка входящего data channel
         myPeerConnection.ondatachannel = (event) => {
             console.log('📡 Data channel получен');
             dataChannel = event.channel;
             setupDataChannel();
         };
         
-        // Сбор ICE кандидатов
         myPeerConnection.onicecandidate = (event) => {
             if (event.candidate) {
                 console.log('📤 Отправка ICE кандидата');
@@ -271,27 +259,24 @@ async function handleIncomingCall(callerId, data) {
             }
         };
         
-        // Обработка ошибок ICE
         myPeerConnection.oniceconnectionstatechange = () => {
             const state = myPeerConnection.iceConnectionState;
             console.log('🔄 ICE состояние:', state);
-            if (state === 'failed') {
-                console.log('❌ ICE failed, пробуем переподключиться...');
-                // Пробуем переподключиться через TURN
+            if (state === 'connected') {
+                console.log('✅ ICE соединение установлено!');
+            } else if (state === 'failed') {
+                console.log('❌ ICE failed');
                 restartIce();
             }
         };
         
-        // Устанавливаем удаленное описание
         await myPeerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
         console.log('✅ Remote description установлен');
         
-        // Создаем ответ
         const answer = await myPeerConnection.createAnswer();
         await myPeerConnection.setLocalDescription(answer);
         console.log('✅ Local description установлен');
         
-        // Отправляем ответ
         await database.ref('calls/' + callerId + '/' + myId).set({
             type: 'answer',
             sdp: answer
@@ -361,7 +346,6 @@ function setupDataChannel() {
                 sharedSecretKey = await deriveSharedKey(myKeyPair.privateKey, peerPublicKey);
                 console.log('🔑 Ключ шифрования установлен!');
                 
-                // Отправляем ответный handshake
                 const rawPubKey = await exportPublicKey(myKeyPair.publicKey);
                 if (dataChannel && dataChannel.readyState === 'open') {
                     dataChannel.send(JSON.stringify({
@@ -376,6 +360,10 @@ function setupDataChannel() {
                 }
                 const decryptedText = await decryptMessage(data.encrypted, sharedSecretKey);
                 appendMessage(decryptedText, 'in');
+            } else if (data.type === 'IMAGE') {
+                if (!sharedSecretKey) return;
+                const decryptedImage = await decryptMessage(data.encrypted, sharedSecretKey);
+                appendImage(decryptedImage, 'in');
             }
         } catch (e) {
             console.error('❌ Ошибка обработки сообщения:', e);
@@ -400,7 +388,6 @@ btnConnect.addEventListener('click', async () => {
         return;
     }
     
-    // Проверяем существует ли пользователь
     try {
         const userSnapshot = await database.ref('users/' + peerId).once('value');
         if (!userSnapshot.exists()) {
@@ -412,7 +399,6 @@ btnConnect.addEventListener('click', async () => {
         return;
     }
     
-    // Очищаем старые вызовы
     await database.ref('calls/' + peerId + '/' + myId).remove();
     await database.ref('calls/' + myId).remove();
     
@@ -428,12 +414,10 @@ async function startCall(peerId) {
         
         myPeerConnection = new RTCPeerConnection(rtcConfig);
         
-        // Создаем data channel
         dataChannel = myPeerConnection.createDataChannel('chat');
         setupDataChannel();
         console.log('📡 Data channel создан');
         
-        // Сбор ICE кандидатов
         myPeerConnection.onicecandidate = (event) => {
             if (event.candidate) {
                 console.log('📤 Отправка ICE кандидата');
@@ -444,24 +428,21 @@ async function startCall(peerId) {
             }
         };
         
-        // Обработка ошибок ICE
         myPeerConnection.oniceconnectionstatechange = () => {
             const state = myPeerConnection.iceConnectionState;
             console.log('🔄 ICE состояние:', state);
-            if (state === 'failed') {
-                console.log('❌ ICE failed, пробуем переподключиться...');
-                restartIce();
-            } else if (state === 'connected') {
+            if (state === 'connected') {
                 console.log('✅ ICE соединение установлено!');
+            } else if (state === 'failed') {
+                console.log('❌ ICE failed');
+                restartIce();
             }
         };
         
-        // Создаем offer
         const offer = await myPeerConnection.createOffer();
         await myPeerConnection.setLocalDescription(offer);
         console.log('✅ Offer создан');
         
-        // Отправляем offer
         await database.ref('calls/' + peerId + '/' + myId).set({
             type: 'offer',
             sdp: offer
@@ -470,11 +451,9 @@ async function startCall(peerId) {
         
         showChat(peerId);
         
-        // Таймаут на случай если соединение не устанавливается
         setTimeout(() => {
             if (!isConnected) {
                 console.log('⏰ Таймаут соединения');
-                // Пробуем переподключиться
                 restartIce();
             }
         }, 15000);
@@ -485,6 +464,8 @@ async function startCall(peerId) {
         resetChat();
     }
 }
+
+// --- ИНТЕРФЕЙС ---
 
 function showChat(peerId) {
     systemPlaceholder.style.display = 'none';
@@ -497,11 +478,11 @@ function showChat(peerId) {
         if (user) {
             chatName.innerText = user.name || 'Собеседник';
             chatAvatar.src = user.avatar || '';
+            addChatToList(peerId, user.name, user.avatar);
+            listenUserStatus(peerId);
         }
     });
 }
-
-// --- ИНТЕРФЕЙС ---
 
 function renderChatLayout() {
     systemPlaceholder.style.display = 'none';
@@ -513,18 +494,65 @@ function renderChatLayout() {
         if (user) {
             chatName.innerText = user.name || 'Собеседник';
             chatAvatar.src = user.avatar || '';
+            addChatToList(remoteId, user.name, user.avatar);
+            listenUserStatus(remoteId);
         }
     });
     
-    chatsList.innerHTML = `
-        <div class="chat-item active">
-            <img class="avatar" src="${chatAvatar.src || ''}">
-            <div class="user-info">
-                <div class="user-name">${chatName.innerText}</div>
-                <div class="chat-status">🔒 Защищено</div>
-            </div>
+    const chatItem = document.querySelector(`.chat-item[data-id="${remoteId}"]`);
+    if (chatItem) {
+        chatItem.classList.add('active');
+    }
+    
+    sendHandshake();
+}
+
+function addChatToList(peerId, name, avatar) {
+    const existing = document.querySelector(`.chat-item[data-id="${peerId}"]`);
+    if (existing) return;
+    
+    const chatItem = document.createElement('div');
+    chatItem.className = 'chat-item';
+    chatItem.dataset.id = peerId;
+    chatItem.innerHTML = `
+        <img class="avatar" src="${avatar || ''}" alt="">
+        <div class="user-info">
+            <div class="user-name">${name || 'Собеседник'}</div>
+            <div class="chat-status">Новый чат</div>
         </div>
     `;
+    
+    chatItem.addEventListener('click', () => {
+        openChat(peerId);
+    });
+    
+    const list = document.getElementById('chats-list');
+    const empty = list.querySelector('.empty-chats');
+    if (empty) empty.remove();
+    list.appendChild(chatItem);
+}
+
+function openChat(peerId) {
+    if (isConnected && remoteId === peerId) return;
+    remoteId = peerId;
+    showChat(peerId);
+    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+    const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
+    if (item) item.classList.add('active');
+}
+
+function listenUserStatus(userId) {
+    database.ref('users/' + userId).on('value', (snapshot) => {
+        const user = snapshot.val();
+        if (user) {
+            if (chatStatusText) {
+                chatStatusText.textContent = user.online ? 'Онлайн' : 'Офлайн';
+                if (statusDot) {
+                    statusDot.className = 'status-dot ' + (user.online ? 'online' : 'offline');
+                }
+            }
+        }
+    });
 }
 
 async function sendHandshake() {
@@ -544,6 +572,8 @@ async function sendHandshake() {
         console.error('❌ Ошибка отправки handshake:', e);
     }
 }
+
+// --- ОТПРАВКА СООБЩЕНИЙ ---
 
 async function handleSendMessage() {
     const text = messageInput.value.trim();
@@ -579,6 +609,72 @@ messageInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleSendMessage();
 });
 
+// --- ОТПРАВКА ИЗОБРАЖЕНИЙ ---
+
+let fileInput = null;
+
+document.getElementById('btn-attach')?.addEventListener('click', () => {
+    if (!fileInput) {
+        fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                await sendImage(file);
+            }
+            fileInput.value = '';
+        };
+    }
+    fileInput.click();
+});
+
+async function sendImage(file) {
+    if (!dataChannel || dataChannel.readyState !== 'open') {
+        alert('Соединение не установлено');
+        return;
+    }
+    
+    try {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const imageData = e.target.result;
+            if (sharedSecretKey) {
+                const encryptedData = await encryptMessage(imageData, sharedSecretKey);
+                dataChannel.send(JSON.stringify({
+                    type: 'IMAGE',
+                    encrypted: encryptedData
+                }));
+                appendImage(imageData, 'out');
+            }
+        };
+        reader.readAsDataURL(file);
+    } catch (e) {
+        console.error('Ошибка отправки фото:', e);
+    }
+}
+
+function appendImage(src, direction) {
+    const msgDiv = document.createElement('div');
+    msgDiv.classList.add('message', direction);
+    
+    const img = document.createElement('img');
+    img.className = 'message-image';
+    img.src = src;
+    img.onclick = () => window.open(src, '_blank');
+    
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    msgDiv.appendChild(img);
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'message-time';
+    timeDiv.textContent = time;
+    msgDiv.appendChild(timeDiv);
+    
+    messagesContainer.appendChild(msgDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
 function appendMessage(text, direction) {
     const msgDiv = document.createElement('div');
     msgDiv.classList.add('message', direction);
@@ -594,6 +690,236 @@ function appendMessage(text, direction) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
+// --- ПРОФИЛЬ ---
+
+document.getElementById('chat-header-click')?.addEventListener('click', () => {
+    if (remoteId) {
+        showProfile(remoteId);
+    }
+});
+
+document.getElementById('btn-profile')?.addEventListener('click', () => {
+    if (remoteId) {
+        showProfile(remoteId);
+    }
+});
+
+document.getElementById('btn-call')?.addEventListener('click', () => {
+    alert('📞 Функция звонков в разработке!');
+});
+
+document.getElementById('btn-emoji')?.addEventListener('click', () => {
+    const input = document.getElementById('message-input');
+    const emojis = ['😊', '😂', '❤️', '🔥', '👍', '👋', '🎉', '✨', '💪', '🤝'];
+    const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+    input.value += emoji;
+    input.focus();
+});
+
+document.getElementById('profile-modal-close')?.addEventListener('click', () => {
+    document.getElementById('profile-modal').style.display = 'none';
+});
+
+document.getElementById('profile-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+        document.getElementById('profile-modal').style.display = 'none';
+    }
+});
+
+async function showProfile(userId) {
+    try {
+        const snapshot = await database.ref('users/' + userId).once('value');
+        const user = snapshot.val();
+        if (!user) {
+            alert('Пользователь не найден');
+            return;
+        }
+        
+        const role = await getUserRole(userId);
+        const roleBadge = getRoleBadge(role);
+        
+        document.getElementById('profile-avatar').src = user.avatar || '';
+        document.getElementById('profile-name').textContent = user.name || 'Без имени';
+        document.getElementById('profile-id').textContent = 'ID: ' + userId;
+        document.getElementById('profile-status').textContent = user.online ? '🟢 Онлайн' : '⚫ Офлайн';
+        document.getElementById('profile-role').textContent = roleBadge || 'Пользователь';
+        
+        document.getElementById('profile-modal').style.display = 'flex';
+        
+        document.getElementById('profile-chat').onclick = () => {
+            document.getElementById('profile-modal').style.display = 'none';
+            openChat(userId);
+        };
+        
+    } catch (e) {
+        console.error('Ошибка загрузки профиля:', e);
+    }
+}
+
+// --- АДМИН-ФУНКЦИИ ---
+
+async function checkIfAdmin() {
+    if (!currentUser) return false;
+    try {
+        const snapshot = await database.ref('admins/' + currentUser.uid).once('value');
+        return snapshot.exists() && snapshot.val().role === 'admin';
+    } catch (e) {
+        console.error('Ошибка проверки админа:', e);
+        return false;
+    }
+}
+
+async function checkIfCreator() {
+    if (!currentUser) return false;
+    try {
+        const snapshot = await database.ref('creator').once('value');
+        return snapshot.exists() && snapshot.val() === currentUser.uid;
+    } catch (e) {
+        console.error('Ошибка проверки создателя:', e);
+        return false;
+    }
+}
+
+async function getUserRole(userId) {
+    try {
+        const creatorSnapshot = await database.ref('creator').once('value');
+        if (creatorSnapshot.exists() && creatorSnapshot.val() === userId) {
+            return 'creator';
+        }
+        const adminSnapshot = await database.ref('admins/' + userId).once('value');
+        if (adminSnapshot.exists()) {
+            return 'admin';
+        }
+        return 'user';
+    } catch (e) {
+        console.error('Ошибка получения роли:', e);
+        return 'user';
+    }
+}
+
+function getRoleBadge(role) {
+    if (role === 'creator') return '👑 Создатель';
+    if (role === 'admin') return '⭐ Админ';
+    return '';
+}
+
+function getRoleColor(role) {
+    if (role === 'creator') return '#ffd700';
+    if (role === 'admin') return '#00bfff';
+    return '#708499';
+}
+
+// --- АДМИН ПАНЕЛЬ ---
+
+async function showAdminPanel() {
+    const isAdmin = await checkIfAdmin();
+    const isCreator = await checkIfCreator();
+    const panel = document.getElementById('admin-panel');
+    
+    if (!panel) return;
+    
+    if (isAdmin || isCreator) {
+        panel.style.display = 'block';
+    }
+}
+
+async function banUser(userId, reason) {
+    if (!await checkIfAdmin()) {
+        alert('❌ Нет прав администратора!');
+        return false;
+    }
+    try {
+        await database.ref('banned/' + userId).set({
+            bannedAt: Date.now(),
+            reason: reason || 'Нарушение правил',
+            bannedBy: currentUser.uid
+        });
+        if (dataChannel && remoteId === userId) {
+            dataChannel.close();
+            resetChat();
+        }
+        console.log('✅ Пользователь забанен:', userId);
+        return true;
+    } catch (e) {
+        console.error('Ошибка бана:', e);
+        return false;
+    }
+}
+
+async function unbanUser(userId) {
+    if (!await checkIfAdmin()) {
+        alert('❌ Нет прав администратора!');
+        return false;
+    }
+    try {
+        await database.ref('banned/' + userId).remove();
+        console.log('✅ Пользователь разбанен:', userId);
+        return true;
+    } catch (e) {
+        console.error('Ошибка разбана:', e);
+        return false;
+    }
+}
+
+async function checkBanned(userId) {
+    try {
+        const snapshot = await database.ref('banned/' + userId).once('value');
+        return snapshot.exists();
+    } catch (e) {
+        console.error('Ошибка проверки бана:', e);
+        return false;
+    }
+}
+
+async function getAllUsers() {
+    if (!await checkIfAdmin()) {
+        alert('❌ Нет прав администратора!');
+        return [];
+    }
+    try {
+        const snapshot = await database.ref('users').once('value');
+        const users = [];
+        snapshot.forEach((child) => {
+            users.push({
+                id: child.key,
+                ...child.val()
+            });
+        });
+        return users;
+    } catch (e) {
+        console.error('Ошибка получения пользователей:', e);
+        return [];
+    }
+}
+
+async function makeAdmin(userId) {
+    if (!await checkIfAdmin()) {
+        alert('❌ Нет прав администратора!');
+        return false;
+    }
+    try {
+        const snapshot = await database.ref('users/' + userId).once('value');
+        const user = snapshot.val();
+        if (!user) {
+            alert('❌ Пользователь не найден');
+            return false;
+        }
+        await database.ref('admins/' + userId).set({
+            role: 'admin',
+            email: user.email || '',
+            name: user.name || '',
+            addedAt: Date.now()
+        });
+        console.log('✅ Пользователь назначен админом:', userId);
+        return true;
+    } catch (e) {
+        console.error('Ошибка назначения админа:', e);
+        return false;
+    }
+}
+
+// --- RESET ---
+
 function resetChat() {
     if (myPeerConnection) {
         myPeerConnection.close();
@@ -606,7 +932,6 @@ function resetChat() {
     isCaller = false;
     isProcessingCall = false;
     
-    // Очищаем вызовы
     if (myId) {
         database.ref('calls/' + myId).remove();
     }
