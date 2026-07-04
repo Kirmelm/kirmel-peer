@@ -2,6 +2,7 @@
 const firebaseConfig = {
     apiKey: "AIzaSyCpqM2Mbz_0l1hB5BLgQ80F8GYFKdSw3PA",
     authDomain: "kirmelcript.firebaseapp.com",
+    databaseURL: "https://kirmelcript-default-rtdb.firebaseio.com",
     projectId: "kirmelcript",
     storageBucket: "kirmelcript.firebasestorage.app",
     messagingSenderId: "668992683850",
@@ -12,10 +13,10 @@ const firebaseConfig = {
 // ============ ИНИЦИАЛИЗАЦИЯ FIREBASE ============
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
-const db = firebase.firestore();
+const db = firebase.database();
 const storage = firebase.storage();
 
-console.log("✅ Firebase инициализирован");
+console.log("✅ Firebase инициализирован (Realtime Database)");
 
 // ============ ГЛОБАЛЬНОЕ СОСТОЯНИЕ ============
 let currentUser = null;
@@ -185,21 +186,21 @@ async function signUp(email, password) {
         // Сохраняем приватный ключ в IndexedDB
         await savePrivateKeyToIndexedDB(user.uid, privateKeyJwk);
         
-        // Сохраняем открытый ключ в Firestore
-        await db.collection("user_keys").doc(user.uid).set({
+        // Сохраняем открытый ключ в Realtime Database
+        await db.ref('user_keys/' + user.uid).set({
             publicKey: publicKeyJwk,
             algorithm: "ECDH",
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
         });
         
         // Создаём профиль пользователя
-        await db.collection("users").doc(user.uid).set({
+        await db.ref('users/' + user.uid).set({
             uid: user.uid,
             email: user.email,
             nickname: "Пользователь_" + Math.random().toString(36).substr(2, 9),
             bio: "",
             avatar: null,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
         });
         
         currentUser = user;
@@ -217,11 +218,17 @@ async function signIn(email, password) {
         
         // Загружаем приватный ключ из IndexedDB
         const privateKeyJwk = await getPrivateKeyFromIndexedDB(user.uid);
+        if (!privateKeyJwk) {
+            throw new Error("Приватный ключ не найден. Требуется повторная регистрация.");
+        }
         const privateKey = await importPrivateKey(privateKeyJwk);
         
-        // Загружаем открытый ключ из Firestore
-        const keyDoc = await db.collection("user_keys").doc(user.uid).get();
-        const publicKey = await importPublicKey(keyDoc.data().publicKey);
+        // Загружаем открытый ключ из Realtime Database
+        const keySnapshot = await db.ref('user_keys/' + user.uid).once('value');
+        if (!keySnapshot.exists()) {
+            throw new Error("Публичный ключ не найден.");
+        }
+        const publicKey = await importPublicKey(keySnapshot.val().publicKey);
         
         userKeyPair = { privateKey, publicKey };
         currentUser = user;
@@ -249,10 +256,10 @@ async function logOut() {
 
 async function updateUserProfile(nickname, bio) {
     try {
-        await db.collection("users").doc(currentUser.uid).update({
+        await db.ref('users/' + currentUser.uid).update({
             nickname,
             bio,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.database.ServerValue.TIMESTAMP,
         });
         console.log("✅ Профиль обновлён");
     } catch (error) {
@@ -266,7 +273,7 @@ async function uploadAvatar(file) {
         await storageRef.put(file);
         const downloadURL = await storageRef.getDownloadURL();
         
-        await db.collection("users").doc(currentUser.uid).update({
+        await db.ref('users/' + currentUser.uid).update({
             avatar: downloadURL,
         });
         
@@ -282,8 +289,11 @@ async function uploadAvatar(file) {
 async function sendMessage(recipientUid, messageText) {
     try {
         // Получаем открытый ключ получателя
-        const recipientKeyDoc = await db.collection("user_keys").doc(recipientUid).get();
-        const recipientPublicKey = await importPublicKey(recipientKeyDoc.data().publicKey);
+        const recipientKeySnapshot = await db.ref('user_keys/' + recipientUid).once('value');
+        if (!recipientKeySnapshot.exists()) {
+            throw new Error("Получатель не найден");
+        }
+        const recipientPublicKey = await importPublicKey(recipientKeySnapshot.val().publicKey);
         
         // Получаем общий секрет
         const sharedSecret = await deriveSharedSecret(userKeyPair.privateKey, recipientPublicKey);
@@ -292,34 +302,43 @@ async function sendMessage(recipientUid, messageText) {
         // Шифруем сообщение
         const encrypted = await encryptMessage(messageText, aesKey);
         
-        // Сохраняем в Firestore
-        const chatId = [currentUser.uid, recipientUid].sort().join("_");
+        // Сохраняем в Realtime Database
+        // Структура: messages/myUid/recipientUid/messageId
+        const ts = firebase.database.ServerValue.TIMESTAMP;
         
-        await db.collection("messages").add({
-            chatId,
-            senderId: currentUser.uid,
-            recipientId: recipientUid,
+        // Сохраняем для отправителя
+        await db.ref('messages/' + currentUser.uid + '/' + recipientUid).push().set({
+            from: currentUser.uid,
+            to: recipientUid,
             text: encrypted,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-            participants: [currentUser.uid, recipientUid],
+            timestamp: ts,
         });
+        
+        // Сохраняем для получателя
+        await db.ref('messages/' + recipientUid + '/' + currentUser.uid).push().set({
+            from: currentUser.uid,
+            to: recipientUid,
+            text: encrypted,
+            timestamp: ts,
+        });
+        
         console.log("✅ Сообщение отправлено");
     } catch (error) {
         throw new Error(`Ошибка отправки: ${error.message}`);
     }
 }
 
-async function getMessages(chatId) {
+async function getMessages(myUid, recipientUid) {
     try {
-        const snapshot = await db.collection("messages")
-            .where("chatId", "==", chatId)
-            .orderBy("timestamp", "asc")
-            .get();
-        
-        return snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        const snapshot = await db.ref('messages/' + myUid + '/' + recipientUid).once('value');
+        const messages = [];
+        snapshot.forEach(childSnapshot => {
+            messages.push({
+                id: childSnapshot.key,
+                ...childSnapshot.val()
+            });
+        });
+        return messages.sort((a, b) => a.timestamp - b.timestamp);
     } catch (error) {
         throw new Error(`Ошибка загрузки сообщений: ${error.message}`);
     }
@@ -329,8 +348,8 @@ async function getMessages(chatId) {
 
 async function isUserAdmin() {
     try {
-        const roleDoc = await db.collection("system_roles").doc(currentUser.uid).get();
-        return roleDoc.exists && roleDoc.data().role === "admin";
+        const roleSnapshot = await db.ref('system_roles/' + currentUser.uid).once('value');
+        return roleSnapshot.exists() && roleSnapshot.val().role === "admin";
     } catch (error) {
         return false;
     }
@@ -344,13 +363,13 @@ async function isOwner() {
 
 async function banUser(userId, reason, banType, penalty) {
     try {
-        await db.collection("banned_users").add({
+        await db.ref('banned_users/' + userId).set({
             userId,
             reason,
             banType,
             penalty,
             bannedBy: currentUser.uid,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
         });
         console.log("✅ Пользователь заблокирован");
     } catch (error) {
@@ -360,11 +379,15 @@ async function banUser(userId, reason, banType, penalty) {
 
 async function getUsers() {
     try {
-        const snapshot = await db.collection("users").limit(100).get();
-        return snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        const snapshot = await db.ref('users').limitToFirst(100).once('value');
+        const users = [];
+        snapshot.forEach(childSnapshot => {
+            users.push({
+                id: childSnapshot.key,
+                ...childSnapshot.val()
+            });
+        });
+        return users;
     } catch (error) {
         throw new Error(`Ошибка загрузки пользователей: ${error.message}`);
     }
@@ -372,11 +395,15 @@ async function getUsers() {
 
 async function getBannedUsers() {
     try {
-        const snapshot = await db.collection("banned_users").get();
-        return snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        const snapshot = await db.ref('banned_users').once('value');
+        const banned = [];
+        snapshot.forEach(childSnapshot => {
+            banned.push({
+                id: childSnapshot.key,
+                ...childSnapshot.val()
+            });
+        });
+        return banned;
     } catch (error) {
         throw new Error(`Ошибка загрузки забанённых: ${error.message}`);
     }

@@ -158,13 +158,15 @@ document.getElementById("profileForm").addEventListener("submit", async (e) => {
 
 async function loadProfile() {
     try {
-        const userDoc = await db.collection("users").doc(currentUser.uid).get();
-        const userData = userDoc.data();
-        
-        document.getElementById("nicknameInput").value = userData.nickname || "";
-        document.getElementById("bioInput").value = userData.bio || "";
-        if (userData.avatar) {
-            document.getElementById("avatarPreview").src = userData.avatar;
+        const userSnapshot = await db.ref('users/' + currentUser.uid).once('value');
+        if (userSnapshot.exists()) {
+            const userData = userSnapshot.val();
+            
+            document.getElementById("nicknameInput").value = userData.nickname || "";
+            document.getElementById("bioInput").value = userData.bio || "";
+            if (userData.avatar) {
+                document.getElementById("avatarPreview").src = userData.avatar;
+            }
         }
     } catch (error) {
         showError("profileError", error.message);
@@ -229,20 +231,24 @@ function renderUsersList(users) {
                     <p class="user-email">${escapeHtml(user.email)}</p>
                 </div>
             </div>
-            <button class="btn-icon ban-btn" onclick="openBanModal('${user.uid}', '${escapeHtml(user.nickname)}')">⛔</button>
+            <button class="btn-icon ban-btn" onclick="openBanModal('${user.uid}', '${escapeHtml(user.nickname)}')" style="cursor: pointer;">⛔</button>
         </div>
     `).join("");
 }
 
 function renderBannedList(banned) {
     const list = document.getElementById("bannedList");
+    if (banned.length === 0) {
+        list.innerHTML = '<p style="text-align: center; color: #888;">Нет забанённых пользователей</p>';
+        return;
+    }
     list.innerHTML = banned.map(ban => `
         <div class="banned-item">
             <p><strong>ID пользователя:</strong> ${escapeHtml(ban.userId)}</p>
             <p><strong>Причина:</strong> ${escapeHtml(ban.reason)}</p>
             <p><strong>Тип:</strong> ${ban.banType === 'temporary' ? 'Временная (24ч)' : 'Постоянная'}</p>
             <p><strong>Штраф:</strong> ${escapeHtml(ban.penalty || 'N/A')}</p>
-            <p><small>Заблокирован: ${new Date(ban.timestamp.toDate()).toLocaleString('ru-RU')}</small></p>
+            <p><small>Забанен: ${new Date(ban.timestamp).toLocaleString('ru-RU')}</small></p>
         </div>
     `).join("");
 }
@@ -285,15 +291,29 @@ document.getElementById("newChatBtn").addEventListener("click", () => {
 });
 
 function startChat(userId) {
-    currentChatId = [currentUser.uid, userId].sort().join("_");
+    currentChatId = userId;
     document.getElementById("chatEmpty").classList.add("hidden");
     document.getElementById("chatWindow").classList.remove("hidden");
+    document.getElementById("chatTitle").textContent = "Загрузка...";
     loadMessages();
+    loadChatUserInfo(userId);
+}
+
+async function loadChatUserInfo(userId) {
+    try {
+        const userSnapshot = await db.ref('users/' + userId).once('value');
+        if (userSnapshot.exists()) {
+            const user = userSnapshot.val();
+            document.getElementById("chatTitle").textContent = user.nickname || "Собеседник";
+        }
+    } catch (error) {
+        console.error("Ошибка загрузки информации о пользователе:", error);
+    }
 }
 
 async function loadMessages() {
     try {
-        const messages = await getMessages(currentChatId);
+        const messages = await getMessages(currentUser.uid, currentChatId);
         renderMessages(messages);
     } catch (error) {
         console.error("Ошибка загрузки сообщений:", error);
@@ -303,11 +323,13 @@ async function loadMessages() {
 function renderMessages(messages) {
     const container = document.getElementById("messagesContainer");
     container.innerHTML = messages.map(msg => {
-        const isOwn = msg.senderId === currentUser.uid;
-        const time = new Date(msg.timestamp.toDate()).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
+        const isOwn = msg.from === currentUser.uid;
+        const time = new Date(msg.timestamp).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
+        // Показываем первые 50 символов зашифрованного текста
+        const preview = msg.text.ciphertext ? msg.text.ciphertext.substring(0, 50) : "[Ошибка]";
         return `
             <div class="message ${isOwn ? 'own' : 'other'}">
-                <p class="message-text">${escapeHtml(msg.text.ciphertext.substring(0, 50))}...</p>
+                <p class="message-text">${escapeHtml(preview)}...</p>
                 <small>${time}</small>
             </div>
         `;
@@ -322,8 +344,7 @@ document.getElementById("messageForm").addEventListener("submit", async (e) => {
     if (!messageText) return;
     
     try {
-        const recipientId = currentChatId.split("_").find(id => id !== currentUser.uid);
-        await sendMessage(recipientId, messageText);
+        await sendMessage(currentChatId, messageText);
         document.getElementById("messageInput").value = "";
         loadMessages();
     } catch (error) {
@@ -345,6 +366,7 @@ function showError(elementId, message) {
 }
 
 function escapeHtml(text) {
+    if (!text) return "";
     const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
@@ -356,5 +378,5 @@ document.getElementById("themeToggle").addEventListener("click", toggleTheme);
 
 document.addEventListener("DOMContentLoaded", () => {
     initTheme();
-    console.log("✅ Приложение КирмельКрипт запущено");
+    console.log("✅ Приложение КирмельКрипт запущено (Realtime Database)");
 });

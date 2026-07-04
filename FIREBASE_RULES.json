@@ -1,0 +1,49 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
+    
+    "users": {
+      "$uid": {
+        ".read": "auth.uid == $uid || root.child('system_roles').child(auth.uid).child('role').val() === 'admin'",
+        ".write": "auth.uid == $uid",
+        ".validate": "newData.hasChildren(['uid', 'email', 'nickname'])"
+      }
+    },
+    
+    "user_keys": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth.uid == $uid",
+        ".validate": "newData.hasChildren(['publicKey', 'algorithm'])"
+      }
+    },
+    
+    "messages": {
+      "$uid": {
+        "$recipientId": {
+          "$messageId": {
+            ".read": "auth.uid == $uid || auth.uid == $recipientId || root.child('system_roles').child(auth.uid).child('role').val() === 'admin'",
+            ".write": "auth.uid == $uid",
+            ".validate": "newData.hasChildren(['text', 'senderId', 'timestamp'])"
+          }
+        }
+      }
+    },
+    
+    "system_roles": {
+      "$uid": {
+        ".read": "root.child('system_roles').child(auth.uid).child('role').val() === 'admin' || root.child('system_roles').child(auth.uid).child('role').val() === 'owner'",
+        ".write": "root.child('system_roles').child(auth.uid).child('role').val() === 'owner'",
+        ".validate": "newData.hasChildren(['role'])"
+      }
+    },
+    
+    "banned_users": {
+      "$userId": {
+        ".read": "root.child('system_roles').child(auth.uid).child('role').val() === 'admin' || root.child('system_roles').child(auth.uid).child('role').val() === 'owner'",
+        ".write": "root.child('system_roles').child(auth.uid).child('role').val() === 'admin' || root.child('system_roles').child(auth.uid).child('role').val() === 'owner'"
+      }
+    }
+  }
+}
