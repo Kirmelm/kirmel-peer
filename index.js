@@ -1,4 +1,4 @@
-// ============ FIREBASE CONFIG ============
+// ============ КОНФИГУРАЦИЯ FIREBASE ============
 const firebaseConfig = {
     apiKey: "AIzaSyCpqM2Mbz_0l1hB5BLgQ80F8GYFKdSw3PA",
     authDomain: "kirmelcript.firebaseapp.com",
@@ -9,20 +9,22 @@ const firebaseConfig = {
     measurementId: "G-MD938Z2WX6"
 };
 
-// ============ FIREBASE INITIALIZATION ============
+// ============ ИНИЦИАЛИЗАЦИЯ FIREBASE ============
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
 
-// ============ GLOBAL STATE ============
+console.log("✅ Firebase инициализирован");
+
+// ============ ГЛОБАЛЬНОЕ СОСТОЯНИЕ ============
 let currentUser = null;
 let userKeyPair = null;
 let currentChatId = null;
 
-// ============ CRYPTO FUNCTIONS ============
+// ============ ФУНКЦИИ КРИПТОГРАФИИ ============
 
-// Generate ECDH Key Pair
+// Генерация пары ключей ECDH
 async function generateKeyPair() {
     const keyPair = await window.crypto.subtle.generateKey(
         {
@@ -35,31 +37,31 @@ async function generateKeyPair() {
     return keyPair;
 }
 
-// Export Public Key to JWK
+// Экспорт открытого ключа в JWK
 async function exportPublicKey(publicKey) {
     const jwk = await window.crypto.subtle.exportKey("jwk", publicKey);
     return JSON.stringify(jwk);
 }
 
-// Export Private Key to JWK (for IndexedDB storage)
+// Экспорт приватного ключа в JWK (для хранения в IndexedDB)
 async function exportPrivateKey(privateKey) {
     const jwk = await window.crypto.subtle.exportKey("jwk", privateKey);
     return JSON.stringify(jwk);
 }
 
-// Import Public Key from JWK
+// Импорт открытого ключа из JWK
 async function importPublicKey(jwkString) {
     const jwk = JSON.parse(jwkString);
     return window.crypto.subtle.importKey("jwk", jwk, "ECDH", false, []);
 }
 
-// Import Private Key from JWK
+// Импорт приватного ключа из JWK
 async function importPrivateKey(jwkString) {
     const jwk = JSON.parse(jwkString);
     return window.crypto.subtle.importKey("jwk", jwk, "ECDH", true, ["deriveKey", "deriveBits"]);
 }
 
-// Derive Shared Secret
+// Получение общего секрета
 async function deriveSharedSecret(privateKey, publicKey) {
     return window.crypto.subtle.deriveBits(
         {
@@ -71,7 +73,7 @@ async function deriveSharedSecret(privateKey, publicKey) {
     );
 }
 
-// Derive AES Key from Shared Secret
+// Производство AES ключа из общего секрета
 async function deriveAESKey(sharedSecret) {
     return window.crypto.subtle.importKey(
         "raw",
@@ -82,7 +84,7 @@ async function deriveAESKey(sharedSecret) {
     );
 }
 
-// Encrypt Message
+// Шифрование сообщения
 async function encryptMessage(message, aesKey) {
     const iv = window.crypto.getRandomValues(new Uint8Array(12));
     const encoder = new TextEncoder();
@@ -103,7 +105,7 @@ async function encryptMessage(message, aesKey) {
     };
 }
 
-// Decrypt Message
+// Расшифровка сообщения
 async function decryptMessage(encrypted, aesKey) {
     const ciphertext = Uint8Array.from(atob(encrypted.ciphertext), c => c.charCodeAt(0));
     const iv = Uint8Array.from(atob(encrypted.iv), c => c.charCodeAt(0));
@@ -121,10 +123,10 @@ async function decryptMessage(encrypted, aesKey) {
     return decoder.decode(plaintext);
 }
 
-// ============ INDEXEDDB STORAGE ============
+// ============ ХРАНИЛИЩЕ IndexedDB ============
 
-const dbName = "KirmelCryptDB";
-const storeName = "keyStore";
+const dbName = "КирмельКрипт_БД";
+const storeName = "ключи";
 
 function initIndexedDB() {
     return new Promise((resolve, reject) => {
@@ -166,44 +168,45 @@ async function getPrivateKeyFromIndexedDB(userId) {
     });
 }
 
-// ============ USER AUTHENTICATION ============
+// ============ АУТЕНТИФИКАЦИЯ ПОЛЬЗОВАТЕЛЯ ============
 
 async function signUp(email, password) {
     try {
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         const user = userCredential.user;
         
-        // Generate and save key pair
+        // Генерируем и сохраняем пару ключей
         const keyPair = await generateKeyPair();
         userKeyPair = keyPair;
         
         const privateKeyJwk = await exportPrivateKey(keyPair.privateKey);
         const publicKeyJwk = await exportPublicKey(keyPair.publicKey);
         
-        // Save private key to IndexedDB
+        // Сохраняем приватный ключ в IndexedDB
         await savePrivateKeyToIndexedDB(user.uid, privateKeyJwk);
         
-        // Save public key to Firestore
+        // Сохраняем открытый ключ в Firestore
         await db.collection("user_keys").doc(user.uid).set({
             publicKey: publicKeyJwk,
             algorithm: "ECDH",
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
         
-        // Create user profile
+        // Создаём профиль пользователя
         await db.collection("users").doc(user.uid).set({
             uid: user.uid,
             email: user.email,
-            nickname: "User_" + Math.random().toString(36).substr(2, 9),
+            nickname: "Пользователь_" + Math.random().toString(36).substr(2, 9),
             bio: "",
             avatar: null,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
         
         currentUser = user;
+        console.log("✅ Пользователь успешно зарегистрирован:", user.email);
         return user;
     } catch (error) {
-        throw new Error(`Sign up failed: ${error.message}`);
+        throw new Error(`Ошибка регистрации: ${error.message}`);
     }
 }
 
@@ -212,20 +215,21 @@ async function signIn(email, password) {
         const userCredential = await auth.signInWithEmailAndPassword(email, password);
         const user = userCredential.user;
         
-        // Load private key from IndexedDB
+        // Загружаем приватный ключ из IndexedDB
         const privateKeyJwk = await getPrivateKeyFromIndexedDB(user.uid);
         const privateKey = await importPrivateKey(privateKeyJwk);
         
-        // Load public key from Firestore
+        // Загружаем открытый ключ из Firestore
         const keyDoc = await db.collection("user_keys").doc(user.uid).get();
         const publicKey = await importPublicKey(keyDoc.data().publicKey);
         
         userKeyPair = { privateKey, publicKey };
         currentUser = user;
         
+        console.log("✅ Вход выполнен:", user.email);
         return user;
     } catch (error) {
-        throw new Error(`Sign in failed: ${error.message}`);
+        throw new Error(`Ошибка входа: ${error.message}`);
     }
 }
 
@@ -235,12 +239,13 @@ async function logOut() {
         currentUser = null;
         userKeyPair = null;
         currentChatId = null;
+        console.log("✅ Выход выполнен");
     } catch (error) {
-        throw new Error(`Logout failed: ${error.message}`);
+        throw new Error(`Ошибка выхода: ${error.message}`);
     }
 }
 
-// ============ USER MANAGEMENT ============
+// ============ УПРАВЛЕНИЕ ПРОФИЛЕМ ============
 
 async function updateUserProfile(nickname, bio) {
     try {
@@ -249,8 +254,9 @@ async function updateUserProfile(nickname, bio) {
             bio,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
+        console.log("✅ Профиль обновлён");
     } catch (error) {
-        throw new Error(`Profile update failed: ${error.message}`);
+        throw new Error(`Ошибка обновления профиля: ${error.message}`);
     }
 }
 
@@ -264,28 +270,29 @@ async function uploadAvatar(file) {
             avatar: downloadURL,
         });
         
+        console.log("✅ Аватар загружен");
         return downloadURL;
     } catch (error) {
-        throw new Error(`Avatar upload failed: ${error.message}`);
+        throw new Error(`Ошибка загрузки аватара: ${error.message}`);
     }
 }
 
-// ============ MESSAGING ============
+// ============ СООБЩЕНИЯ ============
 
 async function sendMessage(recipientUid, messageText) {
     try {
-        // Get recipient's public key
+        // Получаем открытый ключ получателя
         const recipientKeyDoc = await db.collection("user_keys").doc(recipientUid).get();
         const recipientPublicKey = await importPublicKey(recipientKeyDoc.data().publicKey);
         
-        // Derive shared secret
+        // Получаем общий секрет
         const sharedSecret = await deriveSharedSecret(userKeyPair.privateKey, recipientPublicKey);
         const aesKey = await deriveAESKey(sharedSecret);
         
-        // Encrypt message
+        // Шифруем сообщение
         const encrypted = await encryptMessage(messageText, aesKey);
         
-        // Save to Firestore
+        // Сохраняем в Firestore
         const chatId = [currentUser.uid, recipientUid].sort().join("_");
         
         await db.collection("messages").add({
@@ -296,8 +303,9 @@ async function sendMessage(recipientUid, messageText) {
             timestamp: firebase.firestore.FieldValue.serverTimestamp(),
             participants: [currentUser.uid, recipientUid],
         });
+        console.log("✅ Сообщение отправлено");
     } catch (error) {
-        throw new Error(`Message send failed: ${error.message}`);
+        throw new Error(`Ошибка отправки: ${error.message}`);
     }
 }
 
@@ -313,11 +321,11 @@ async function getMessages(chatId) {
             ...doc.data()
         }));
     } catch (error) {
-        throw new Error(`Failed to load messages: ${error.message}`);
+        throw new Error(`Ошибка загрузки сообщений: ${error.message}`);
     }
 }
 
-// ============ ADMIN FUNCTIONS ============
+// ============ АДМИН-ФУНКЦИИ ============
 
 async function isUserAdmin() {
     try {
@@ -329,7 +337,7 @@ async function isUserAdmin() {
 }
 
 async function isOwner() {
-    // Replace with your actual Firebase UID
+    // ЗАМЕНИ НА СВОЙ Firebase UID
     const OWNER_UID = "YOUR_PERSONAL_UID_HERE";
     return currentUser.uid === OWNER_UID;
 }
@@ -344,8 +352,9 @@ async function banUser(userId, reason, banType, penalty) {
             bannedBy: currentUser.uid,
             timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         });
+        console.log("✅ Пользователь заблокирован");
     } catch (error) {
-        throw new Error(`Ban failed: ${error.message}`);
+        throw new Error(`Ошибка блокировки: ${error.message}`);
     }
 }
 
@@ -357,7 +366,7 @@ async function getUsers() {
             ...doc.data()
         }));
     } catch (error) {
-        throw new Error(`Failed to load users: ${error.message}`);
+        throw new Error(`Ошибка загрузки пользователей: ${error.message}`);
     }
 }
 
@@ -369,28 +378,28 @@ async function getBannedUsers() {
             ...doc.data()
         }));
     } catch (error) {
-        throw new Error(`Failed to load banned users: ${error.message}`);
+        throw new Error(`Ошибка загрузки забанённых: ${error.message}`);
     }
 }
 
-// ============ AUTH STATE LISTENER ============
+// ============ СЛУШАТЕЛЬ СОСТОЯНИЯ АУТЕНТИФИКАЦИИ ============
 
 auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
-        // Show messenger
+        // Показываем мессенджер
         document.getElementById("landing").classList.add("hidden");
         document.getElementById("authPage").classList.add("hidden");
         document.getElementById("messenger").classList.remove("hidden");
         
-        // Show admin button if user is admin
+        // Показываем кнопку админа если пользователь админ
         const isAdmin = await isUserAdmin();
-        if (isAdmin) {
+        if (isAdmin || await isOwner()) {
             document.getElementById("adminPanelBtn").classList.remove("hidden");
         }
     } else {
         currentUser = null;
-        // Show landing
+        // Показываем главную страницу
         document.getElementById("messenger").classList.add("hidden");
         document.getElementById("profilePage").classList.add("hidden");
         document.getElementById("landing").classList.remove("hidden");

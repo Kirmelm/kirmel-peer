@@ -3,198 +3,198 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KirmelCrypt | P2P Messenger & Social Platform</title>
+    <title>КирмельКрипт | Безопасный P2P-мессенджер</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="app">
-        <!-- THEME TOGGLE (Top Right) -->
-        <button id="themeToggle" class="theme-toggle" title="Toggle theme">🌙</button>
+        <!-- ПЕРЕКЛЮЧАТЕЛЬ ТЕМ (Верхний правый угол) -->
+        <button id="themeToggle" class="theme-toggle" title="Переключить тему">🌙</button>
         
-        <!-- ADMIN PANEL BUTTON (Top Right) -->
-        <button id="adminPanelBtn" class="admin-panel-btn hidden" title="Admin Panel">⚙️</button>
+        <!-- КНОПКА АДМИН-ПАНЕЛИ (Верхний правый угол) -->
+        <button id="adminPanelBtn" class="admin-panel-btn hidden" title="Админ-панель">⚙️</button>
         
-        <!-- LOADING SPINNER -->
+        <!-- ЗАГРУЗКА -->
         <div id="loading" class="loading hidden">
             <div class="spinner"></div>
         </div>
         
-        <!-- LANDING PAGE -->
+        <!-- ГЛАВНАЯ СТРАНИЦА -->
         <section id="landing" class="screen">
             <div class="container">
                 <div class="logo-container">
                     <div class="logo">🔐</div>
-                    <h1>KirmelCrypt</h1>
-                    <p class="tagline">Private. Secure. Peer-to-Peer.</p>
+                    <h1>КирмельКрипт</h1>
+                    <p class="tagline">Приватность. Безопасность. Прямое соединение.</p>
                 </div>
                 <div class="features">
                     <div class="feature">
                         <span class="icon">🔒</span>
-                        <h3>E2EE Encryption</h3>
-                        <p>End-to-End encrypted messages</p>
+                        <h3>Сквозное шифрование</h3>
+                        <p>Сообщения зашифрованы с обоих сторон</p>
                     </div>
                     <div class="feature">
                         <span class="icon">👥</span>
-                        <h3>P2P Network</h3>
-                        <p>Direct peer connections</p>
+                        <h3>Сеть P2P</h3>
+                        <p>Прямые соединения между пользователями</p>
                     </div>
                     <div class="feature">
                         <span class="icon">⚡</span>
-                        <h3>Serverless</h3>
-                        <p>Powered by Firebase</p>
+                        <h3>Без сервера</h3>
+                        <p>Работает на Firebase</p>
                     </div>
                 </div>
                 <div class="auth-buttons">
-                    <button id="signUpBtn" class="btn btn-primary">Sign Up</button>
-                    <button id="signInBtn" class="btn btn-secondary">Sign In</button>
+                    <button id="signUpBtn" class="btn btn-primary">Регистрация</button>
+                    <button id="signInBtn" class="btn btn-secondary">Вход</button>
                 </div>
             </div>
         </section>
         
-        <!-- AUTH PAGE -->
+        <!-- СТРАНИЦА АВТОРИЗАЦИИ -->
         <section id="authPage" class="screen hidden">
             <div class="container auth-container">
-                <button class="back-btn" id="backFromAuth">← Back</button>
+                <button class="back-btn" id="backFromAuth">← Назад</button>
                 <div class="auth-box">
-                    <h2 id="authTitle">Sign Up</h2>
+                    <h2 id="authTitle">Регистрация</h2>
                     <form id="authForm">
                         <input type="email" id="authEmail" placeholder="Email" required>
-                        <input type="password" id="authPassword" placeholder="Password (min 6)" required>
+                        <input type="password" id="authPassword" placeholder="Пароль (минимум 6 символов)" required>
                         <div id="confirmPasswordDiv" class="hidden">
-                            <input type="password" id="authConfirmPassword" placeholder="Confirm Password" required>
+                            <input type="password" id="authConfirmPassword" placeholder="Повторить пароль" required>
                         </div>
-                        <button type="submit" class="btn btn-primary">Sign Up</button>
+                        <button type="submit" class="btn btn-primary">Регистрация</button>
                     </form>
-                    <p id="toggleAuthMode" class="toggle-auth">Already have an account? <span>Sign In</span></p>
+                    <p id="toggleAuthMode" class="toggle-auth">Уже есть аккаунт? <span>Вход</span></p>
                     <div id="authError" class="error hidden"></div>
                 </div>
             </div>
         </section>
         
-        <!-- MESSENGER PAGE -->
+        <!-- СТРАНИЦА МЕССЕНДЖЕРА -->
         <section id="messenger" class="screen hidden">
             <div class="messenger-container">
-                <!-- Sidebar -->
+                <!-- Боковая панель -->
                 <aside class="sidebar">
                     <div class="sidebar-header">
-                        <h2>Chats</h2>
-                        <button id="newChatBtn" class="btn-icon" title="New Chat">➕</button>
+                        <h2>Чаты</h2>
+                        <button id="newChatBtn" class="btn-icon" title="Новый чат">➕</button>
                     </div>
                     <div id="chatsList" class="chats-list">
-                        <!-- Dynamically populated -->
+                        <!-- Чаты загружаются сюда -->
                     </div>
                 </aside>
                 
-                <!-- Main Chat -->
+                <!-- Основной чат -->
                 <main class="chat-main">
                     <div id="chatEmpty" class="chat-empty">
-                        <p>Select a chat to start messaging</p>
+                        <p>Выберите чат для начала общения</p>
                     </div>
                     <div id="chatWindow" class="chat-window hidden">
                         <div class="chat-header">
-                            <h3 id="chatTitle">Chat</h3>
-                            <button id="profileBtn" class="btn-icon" title="Profile">👤</button>
+                            <h3 id="chatTitle">Чат</h3>
+                            <button id="profileBtn" class="btn-icon" title="Профиль">👤</button>
                         </div>
                         <div id="messagesContainer" class="messages-container">
-                            <!-- Messages loaded here -->
+                            <!-- Сообщения загружаются сюда -->
                         </div>
                         <form id="messageForm" class="message-form">
-                            <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off">
-                            <button type="submit" class="btn-icon" title="Send">✈️</button>
+                            <input type="text" id="messageInput" placeholder="Напишите сообщение..." autocomplete="off">
+                            <button type="submit" class="btn-icon" title="Отправить">✈️</button>
                         </form>
                     </div>
                 </main>
             </div>
         </section>
         
-        <!-- PROFILE PAGE -->
+        <!-- СТРАНИЦА ПРОФИЛЯ -->
         <section id="profilePage" class="screen hidden">
             <div class="container profile-container">
-                <button class="back-btn" id="backFromProfile">← Back</button>
+                <button class="back-btn" id="backFromProfile">← Назад</button>
                 <div class="profile-box">
-                    <h2>My Profile</h2>
+                    <h2>Мой профиль</h2>
                     <div class="avatar-section">
-                        <img id="avatarPreview" class="avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23ddd'/%3E%3Ccircle cx='50' cy='35' r='15' fill='%23999'/%3E%3Cellipse cx='50' cy='65' rx='25' ry='20' fill='%23999'/%3E%3C/svg%3E" alt="Avatar">
+                        <img id="avatarPreview" class="avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23ddd'/%3E%3Ccircle cx='50' cy='35' r='15' fill='%23999'/%3E%3Cellipse cx='50' cy='65' rx='25' ry='20' fill='%23999'/%3E%3C/svg%3E" alt="Аватар">
                         <input type="file" id="avatarInput" accept="image/*" hidden>
-                        <button type="button" id="uploadAvatarBtn" class="btn btn-secondary">Upload Avatar</button>
+                        <button type="button" id="uploadAvatarBtn" class="btn btn-secondary">Загрузить аватар</button>
                     </div>
                     <form id="profileForm">
-                        <input type="text" id="nicknameInput" placeholder="Nickname" maxlength="30" required>
-                        <textarea id="bioInput" placeholder="Bio" maxlength="150"></textarea>
-                        <button type="submit" class="btn btn-primary">Save Profile</button>
+                        <input type="text" id="nicknameInput" placeholder="Никнейм" maxlength="30" required>
+                        <textarea id="bioInput" placeholder="О себе" maxlength="150"></textarea>
+                        <button type="submit" class="btn btn-primary">Сохранить профиль</button>
                     </form>
-                    <button id="logoutBtn" class="btn btn-danger">Logout</button>
+                    <button id="logoutBtn" class="btn btn-danger">Выход</button>
                     <div id="profileError" class="error hidden"></div>
                 </div>
             </div>
         </section>
         
-        <!-- ADMIN MODAL -->
+        <!-- АДМИН-ПАНЕЛЬ (МОДАЛЬНОЕ ОКНО) -->
         <div id="adminModal" class="modal hidden">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Admin Panel</h2>
+                    <h2>👑 Админ-панель</h2>
                     <button class="close-modal" id="closeAdminModal">✕</button>
                 </div>
                 <div class="modal-body">
                     <div class="admin-tabs">
-                        <button class="tab-btn active" data-tab="users">Users</button>
-                        <button class="tab-btn" data-tab="banned">Banned</button>
-                        <button class="tab-btn" data-tab="roles">Roles</button>
+                        <button class="tab-btn active" data-tab="users">Пользователи</button>
+                        <button class="tab-btn" data-tab="banned">Забанены</button>
+                        <button class="tab-btn" data-tab="roles">Роли</button>
                     </div>
                     
-                    <!-- Users Tab -->
+                    <!-- Вкладка Пользователи -->
                     <div id="usersTab" class="tab-content active">
                         <div class="search-box">
-                            <input type="text" id="userSearch" placeholder="Search users...">
+                            <input type="text" id="userSearch" placeholder="Поиск пользователя...">
                         </div>
                         <div id="usersList" class="users-list">
-                            <!-- Users loaded dynamically -->
+                            <!-- Пользователи загружаются сюда -->
                         </div>
                     </div>
                     
-                    <!-- Banned Tab -->
+                    <!-- Вкладка Забанены -->
                     <div id="bannedTab" class="tab-content hidden">
                         <div id="bannedList" class="banned-list">
-                            <!-- Banned users loaded dynamically -->
+                            <!-- Забанены пользователи загружаются сюда -->
                         </div>
                     </div>
                     
-                    <!-- Roles Tab -->
+                    <!-- Вкладка Роли -->
                     <div id="rolesTab" class="tab-content hidden">
                         <div id="rolesList" class="roles-list">
-                            <!-- Roles loaded dynamically -->
+                            <!-- Роли загружаются сюда -->
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- BAN ACTION MODAL -->
+        <!-- МОДАЛЬНОЕ ОКНО БЛОКИРОВКИ -->
         <div id="banModal" class="modal hidden">
             <div class="modal-content ban-modal-content">
                 <div class="modal-header">
-                    <h2>Ban User</h2>
+                    <h2>🚫 Заблокировать пользователя</h2>
                     <button class="close-modal" id="closeBanModal">✕</button>
                 </div>
                 <form id="banForm">
                     <div class="form-group">
-                        <label for="banReason">Reason</label>
-                        <textarea id="banReason" placeholder="Why is this user banned?" required></textarea>
+                        <label for="banReason">Причина блокировки</label>
+                        <textarea id="banReason" placeholder="Почему блокируем этого пользователя?" required></textarea>
                     </div>
                     <div class="form-group">
-                        <label for="banType">Ban Type</label>
+                        <label for="banType">Тип блокировки</label>
                         <select id="banType" required>
-                            <option value="">Select...</option>
-                            <option value="temporary">Temporary (24h)</option>
-                            <option value="permanent">Permanent</option>
+                            <option value="">Выберите...</option>
+                            <option value="temporary">Временная (24 часа)</option>
+                            <option value="permanent">Постоянная</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="banPenalty">Penalty</label>
-                        <input type="text" id="banPenalty" placeholder="e.g., -50 reputation">
+                        <label for="banPenalty">Штраф</label>
+                        <input type="text" id="banPenalty" placeholder="Например: -50 репутации">
                     </div>
-                    <button type="submit" class="btn btn-danger">Confirm Ban</button>
+                    <button type="submit" class="btn btn-danger">Подтвердить блокировку</button>
                 </form>
             </div>
         </div>
@@ -206,7 +206,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js"></script>
     
-    <!-- App Scripts -->
+    <!-- Скрипты приложения -->
     <script src="index.js"></script>
     <script src="app.js"></script>
 </body>

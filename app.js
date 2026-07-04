@@ -1,4 +1,4 @@
-// ============ THEME MANAGEMENT ============
+// ============ УПРАВЛЕНИЕ ТЕМОЙ ============
 
 const THEME_KEY = "kirmel_theme";
 
@@ -15,6 +15,7 @@ function toggleTheme() {
     document.documentElement.setAttribute("data-theme", newTheme);
     localStorage.setItem(THEME_KEY, newTheme);
     updateThemeButton(newTheme);
+    console.log(`🎨 Тема изменена на: ${newTheme}`);
 }
 
 function updateThemeButton(theme) {
@@ -22,47 +23,47 @@ function updateThemeButton(theme) {
     btn.textContent = theme === "dark" ? "☀️" : "🌙";
 }
 
-// ============ SCREEN NAVIGATION ============
+// ============ НАВИГАЦИЯ ПО ЭКРАНАМ ============
 
 function showScreen(screenId) {
     document.querySelectorAll(".screen").forEach(s => s.classList.add("hidden"));
     document.getElementById(screenId).classList.remove("hidden");
 }
 
-// ============ AUTH PAGE ============
+// ============ СТРАНИЦА АВТОРИЗАЦИИ ============
 
 let isSignUpMode = true;
 
 document.getElementById("signUpBtn").addEventListener("click", () => {
     isSignUpMode = true;
-    document.getElementById("authTitle").textContent = "Sign Up";
-    document.getElementById("authForm").querySelector("button").textContent = "Sign Up";
+    document.getElementById("authTitle").textContent = "Регистрация";
+    document.getElementById("authForm").querySelector("button").textContent = "Регистрация";
     document.getElementById("confirmPasswordDiv").classList.remove("hidden");
-    document.getElementById("toggleAuthMode").querySelector("span").textContent = "Sign In";
+    document.getElementById("toggleAuthMode").querySelector("span").textContent = "Вход";
     showScreen("authPage");
 });
 
 document.getElementById("signInBtn").addEventListener("click", () => {
     isSignUpMode = false;
-    document.getElementById("authTitle").textContent = "Sign In";
-    document.getElementById("authForm").querySelector("button").textContent = "Sign In";
+    document.getElementById("authTitle").textContent = "Вход";
+    document.getElementById("authForm").querySelector("button").textContent = "Вход";
     document.getElementById("confirmPasswordDiv").classList.add("hidden");
-    document.getElementById("toggleAuthMode").querySelector("span").textContent = "Sign Up";
+    document.getElementById("toggleAuthMode").querySelector("span").textContent = "Регистрация";
     showScreen("authPage");
 });
 
 document.getElementById("toggleAuthMode").addEventListener("click", () => {
     isSignUpMode = !isSignUpMode;
     if (isSignUpMode) {
-        document.getElementById("authTitle").textContent = "Sign Up";
-        document.getElementById("authForm").querySelector("button").textContent = "Sign Up";
+        document.getElementById("authTitle").textContent = "Регистрация";
+        document.getElementById("authForm").querySelector("button").textContent = "Регистрация";
         document.getElementById("confirmPasswordDiv").classList.remove("hidden");
-        document.getElementById("toggleAuthMode").querySelector("span").textContent = "Sign In";
+        document.getElementById("toggleAuthMode").querySelector("span").textContent = "Вход";
     } else {
-        document.getElementById("authTitle").textContent = "Sign In";
-        document.getElementById("authForm").querySelector("button").textContent = "Sign In";
+        document.getElementById("authTitle").textContent = "Вход";
+        document.getElementById("authForm").querySelector("button").textContent = "Вход";
         document.getElementById("confirmPasswordDiv").classList.add("hidden");
-        document.getElementById("toggleAuthMode").querySelector("span").textContent = "Sign Up";
+        document.getElementById("toggleAuthMode").querySelector("span").textContent = "Регистрация";
     }
 });
 
@@ -74,7 +75,12 @@ document.getElementById("authForm").addEventListener("submit", async (e) => {
     const confirmPassword = document.getElementById("authConfirmPassword").value;
     
     if (isSignUpMode && password !== confirmPassword) {
-        showError("authError", "Passwords don't match");
+        showError("authError", "Пароли не совпадают");
+        return;
+    }
+    
+    if (password.length < 6) {
+        showError("authError", "Пароль должен быть минимум 6 символов");
         return;
     }
     
@@ -97,7 +103,7 @@ document.getElementById("backFromAuth").addEventListener("click", () => {
     showScreen("landing");
 });
 
-// ============ PROFILE PAGE ============
+// ============ СТРАНИЦА ПРОФИЛЯ ============
 
 document.getElementById("profileBtn").addEventListener("click", () => {
     showScreen("profilePage");
@@ -134,7 +140,7 @@ document.getElementById("profileForm").addEventListener("submit", async (e) => {
     const bio = document.getElementById("bioInput").value.trim();
     
     if (!nickname) {
-        showError("profileError", "Nickname is required");
+        showError("profileError", "Никнейм не может быть пустым");
         return;
     }
     
@@ -142,7 +148,7 @@ document.getElementById("profileForm").addEventListener("submit", async (e) => {
         showLoading(true);
         await updateUserProfile(nickname, bio);
         showLoading(false);
-        alert("Profile updated!");
+        alert("✅ Профиль обновлён!");
         showScreen("messenger");
     } catch (error) {
         showLoading(false);
@@ -174,7 +180,7 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
     }
 });
 
-// ============ ADMIN PANEL ============
+// ============ АДМИН-ПАНЕЛЬ ============
 
 document.getElementById("adminPanelBtn").addEventListener("click", () => {
     document.getElementById("adminModal").classList.remove("hidden");
@@ -208,7 +214,7 @@ async function loadAdminPanel() {
         const banned = await getBannedUsers();
         renderBannedList(banned);
     } catch (error) {
-        console.error(error);
+        console.error("Ошибка загрузки админ-панели:", error);
     }
 }
 
@@ -219,11 +225,11 @@ function renderUsersList(users) {
             <div class="user-info">
                 <img src="${user.avatar || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ccircle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%23ddd%22/%3E%3C/svg%3E'}" class="user-avatar" alt="${user.nickname}">
                 <div>
-                    <p class="user-nickname">${user.nickname}</p>
-                    <p class="user-email">${user.email}</p>
+                    <p class="user-nickname">${escapeHtml(user.nickname)}</p>
+                    <p class="user-email">${escapeHtml(user.email)}</p>
                 </div>
             </div>
-            <button class="btn-icon ban-btn" onclick="openBanModal('${user.uid}', '${user.nickname}')">⛔</button>
+            <button class="btn-icon ban-btn" onclick="openBanModal('${user.uid}', '${escapeHtml(user.nickname)}')">⛔</button>
         </div>
     `).join("");
 }
@@ -232,11 +238,11 @@ function renderBannedList(banned) {
     const list = document.getElementById("bannedList");
     list.innerHTML = banned.map(ban => `
         <div class="banned-item">
-            <p><strong>User ID:</strong> ${ban.userId}</p>
-            <p><strong>Reason:</strong> ${ban.reason}</p>
-            <p><strong>Type:</strong> ${ban.banType}</p>
-            <p><strong>Penalty:</strong> ${ban.penalty || "N/A"}</p>
-            <p><small>Banned by: ${ban.bannedBy}</small></p>
+            <p><strong>ID пользователя:</strong> ${escapeHtml(ban.userId)}</p>
+            <p><strong>Причина:</strong> ${escapeHtml(ban.reason)}</p>
+            <p><strong>Тип:</strong> ${ban.banType === 'temporary' ? 'Временная (24ч)' : 'Постоянная'}</p>
+            <p><strong>Штраф:</strong> ${escapeHtml(ban.penalty || 'N/A')}</p>
+            <p><small>Заблокирован: ${new Date(ban.timestamp.toDate()).toLocaleString('ru-RU')}</small></p>
         </div>
     `).join("");
 }
@@ -260,19 +266,19 @@ document.getElementById("banForm").addEventListener("submit", async (e) => {
     
     try {
         await banUser(userId, reason, banType, penalty);
-        alert("User banned!");
+        alert("✅ Пользователь заблокирован!");
         document.getElementById("banModal").classList.add("hidden");
         document.getElementById("banForm").reset();
         loadAdminPanel();
     } catch (error) {
-        alert(error.message);
+        alert("❌ Ошибка: " + error.message);
     }
 });
 
-// ============ MESSAGING ============
+// ============ МЕССЕНДЖЕР ============
 
 document.getElementById("newChatBtn").addEventListener("click", () => {
-    const userId = prompt("Enter user ID to chat:");
+    const userId = prompt("Введите ID пользователя для чата:");
     if (userId) {
         startChat(userId);
     }
@@ -290,7 +296,7 @@ async function loadMessages() {
         const messages = await getMessages(currentChatId);
         renderMessages(messages);
     } catch (error) {
-        console.error(error);
+        console.error("Ошибка загрузки сообщений:", error);
     }
 }
 
@@ -298,10 +304,11 @@ function renderMessages(messages) {
     const container = document.getElementById("messagesContainer");
     container.innerHTML = messages.map(msg => {
         const isOwn = msg.senderId === currentUser.uid;
+        const time = new Date(msg.timestamp.toDate()).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
         return `
             <div class="message ${isOwn ? 'own' : 'other'}">
                 <p class="message-text">${escapeHtml(msg.text.ciphertext.substring(0, 50))}...</p>
-                <small>${new Date(msg.timestamp.toDate()).toLocaleTimeString()}</small>
+                <small>${time}</small>
             </div>
         `;
     }).join("");
@@ -320,11 +327,11 @@ document.getElementById("messageForm").addEventListener("submit", async (e) => {
         document.getElementById("messageInput").value = "";
         loadMessages();
     } catch (error) {
-        alert(error.message);
+        alert("❌ Ошибка отправки: " + error.message);
     }
 });
 
-// ============ UTILITIES ============
+// ============ УТИЛИТЫ ============
 
 function showLoading(show) {
     document.getElementById("loading").classList.toggle("hidden", !show);
@@ -343,10 +350,11 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// ============ INIT ============
+// ============ ИНИЦИАЛИЗАЦИЯ ============
 
 document.getElementById("themeToggle").addEventListener("click", toggleTheme);
 
 document.addEventListener("DOMContentLoaded", () => {
     initTheme();
+    console.log("✅ Приложение КирмельКрипт запущено");
 });
