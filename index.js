@@ -1,4 +1,4 @@
-// ============ КОНФИГУРАЦИЯ FIREBASE ============
+// ============ КОНФИГУРАЦИЯ FIREBASE (ПЕРВЫМ!) ============
 const firebaseConfig = {
     apiKey: "AIzaSyCpqM2Mbz_0l1hB5BLgQ80F8GYFKdSw3PA",
     authDomain: "kirmelcript.firebaseapp.com",
@@ -248,7 +248,7 @@ async function logOut() {
         currentChatId = null;
         console.log("✅ Выход выполнен");
     } catch (error) {
-        throw new Error(`Ошибка выхода: ${error.message}`);
+        throw new Error(`Ош��бка выхода: ${error.message}`);
     }
 }
 
@@ -358,7 +358,7 @@ async function isUserAdmin() {
 async function isOwner() {
     // ЗАМЕНИ НА СВОЙ Firebase UID
     const OWNER_UID = "YOUR_PERSONAL_UID_HERE";
-    return currentUser.uid === OWNER_UID;
+    return currentUser && currentUser.uid === OWNER_UID;
 }
 
 async function banUser(userId, reason, banType, penalty) {
@@ -415,20 +415,33 @@ auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
         // Показываем мессенджер
-        document.getElementById("landing").classList.add("hidden");
-        document.getElementById("authPage").classList.add("hidden");
-        document.getElementById("messenger").classList.remove("hidden");
+        const landing = document.getElementById("landing");
+        const authPage = document.getElementById("authPage");
+        const messenger = document.getElementById("messenger");
+        
+        if (landing) landing.classList.add("hidden");
+        if (authPage) authPage.classList.add("hidden");
+        if (messenger) messenger.classList.remove("hidden");
         
         // Показываем кнопку админа если пользователь админ
-        const isAdmin = await isUserAdmin();
-        if (isAdmin || await isOwner()) {
-            document.getElementById("adminPanelBtn").classList.remove("hidden");
+        const adminPanelBtn = document.getElementById("adminPanelBtn");
+        if (adminPanelBtn) {
+            const isAdmin = await isUserAdmin();
+            if (isAdmin || await isOwner()) {
+                adminPanelBtn.classList.remove("hidden");
+            }
         }
     } else {
         currentUser = null;
         // Показываем главную страницу
-        document.getElementById("messenger").classList.add("hidden");
-        document.getElementById("profilePage").classList.add("hidden");
-        document.getElementById("landing").classList.remove("hidden");
+        const landing = document.getElementById("landing");
+        const messenger = document.getElementById("messenger");
+        const profilePage = document.getElementById("profilePage");
+        
+        if (messenger) messenger.classList.add("hidden");
+        if (profilePage) profilePage.classList.add("hidden");
+        if (landing) landing.classList.remove("hidden");
     }
 });
+
+console.log("✅ index.js загружен!");
