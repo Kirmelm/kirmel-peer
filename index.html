@@ -3,592 +3,211 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KirmelChat</title>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-    <style>
-        *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,sans-serif}
-        body{background:#0a0a0a;color:#fff;height:100vh;display:flex;flex-direction:column}
-        #auth{display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a0a}
-        .card{background:#1f1f1f;padding:40px;border-radius:16px;max-width:360px;width:90%;text-align:center}
-        .card h1{color:#5288c1}
-        .card button{background:#5288c1;color:#fff;border:none;padding:12px;border-radius:8px;width:100%;font-size:16px;cursor:pointer}
-        .err{color:#e74c3c;margin-top:12px;display:none}
-        #app{display:none;height:100vh;flex-direction:column}
-        .top{background:#1f1f1f;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #333}
-        .top .user{display:flex;align-items:center;gap:10px}
-        .top .avatar{width:36px;height:36px;border-radius:50%;background:#333}
-        .top .name{font-weight:600}
-        .top .id{font-size:12px;color:#888;cursor:pointer}
-        .mid{display:flex;flex:1;overflow:hidden}
-        .sidebar{width:280px;background:#141414;border-right:1px solid #333;display:flex;flex-direction:column;flex-shrink:0}
-        .sidebar .find{padding:12px;display:flex;gap:6px}
-        .sidebar .find input{flex:1;padding:8px 12px;border-radius:8px;border:none;background:#1f1f1f;color:#fff;outline:none}
-        .sidebar .find button{background:#5288c1;border:none;border-radius:8px;color:#fff;padding:0 12px;cursor:pointer}
-        .sidebar .list{flex:1;overflow-y:auto;padding:8px}
-        .sidebar .item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer}
-        .sidebar .item:hover{background:#1f1f1f}
-        .sidebar .item.active{background:#1f1f1f}
-        .sidebar .item .info{flex:1;overflow:hidden}
-        .sidebar .item .name{font-weight:500}
-        .sidebar .item .last{font-size:12px;color:#888}
-        .empty{text-align:center;color:#888;padding:40px 0}
-        .chat{flex:1;display:flex;flex-direction:column;background:#0a0a0a}
-        .chat .head{padding:12px 16px;background:#1f1f1f;border-bottom:1px solid #333;display:flex;align-items:center;gap:12px}
-        .chat .head .name{font-weight:600}
-        .chat .head .status{font-size:12px;color:#888}
-        .chat .msgs{flex:1;padding:16px;overflow-y:auto;display:flex;flex-direction:column}
-        .chat .msgs .msg{max-width:70%;padding:8px 12px;border-radius:16px;margin-bottom:4px;font-size:14px;word-wrap:break-word}
-        .chat .msgs .out{background:#2b5278;align-self:flex-end;border-bottom-right-radius:4px}
-        .chat .msgs .in{background:#1f1f1f;align-self:flex-start;border-bottom-left-radius:4px}
-        .chat .msgs .time{font-size:10px;color:#888;text-align:right;margin-top:2px}
-        .chat .bottom{padding:12px;background:#1f1f1f;display:flex;gap:8px;border-top:1px solid #333}
-        .chat .bottom input{flex:1;padding:10px 16px;border-radius:20px;border:none;background:#0a0a0a;color:#fff;outline:none}
-        .chat .bottom button{background:#5288c1;border:none;border-radius:50%;width:40px;height:40px;color:#fff;font-size:18px;cursor:pointer}
-        .admin-panel{display:none;padding:12px;background:#141414;border-top:1px solid #333}
-        .admin-panel h4{color:#5288c1;font-size:13px}
-        .admin-panel input{width:100%;padding:6px 10px;border-radius:4px;border:none;background:#1f1f1f;color:#fff;margin-bottom:6px}
-        .admin-panel .row{display:flex;gap:6px;flex-wrap:wrap}
-        .admin-panel .row button{padding:4px 10px;border:none;border-radius:4px;font-size:11px;cursor:pointer}
-        .admin-panel .row .danger{background:#e74c3c;color:#fff}
-        .admin-panel .row .success{background:#27ae60;color:#fff}
-        .admin-panel .row .warning{background:#f39c12;color:#fff}
-        .admin-panel .row .info{background:#5288c1;color:#fff}
-        .admin-panel .list{max-height:120px;overflow-y:auto;font-size:12px;margin-top:6px}
-        .admin-panel .list div{padding:4px;border-bottom:1px solid #333;display:flex;justify-content:space-between}
-        .profile-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center}
-        .profile-modal .modal{background:#1f1f1f;border-radius:16px;padding:32px;max-width:360px;width:90%;position:relative;text-align:center}
-        .profile-modal .modal .close{position:absolute;top:12px;right:16px;font-size:24px;cursor:pointer;color:#888}
-        .profile-modal .modal img{width:80px;height:80px;border-radius:50%;object-fit:cover;margin-bottom:12px}
-        .profile-modal .modal .p-name{font-size:20px;font-weight:700}
-        .profile-modal .modal .p-id{font-size:13px;color:#888}
-        .profile-modal .modal .p-status{font-size:14px;color:#888}
-        .profile-modal .modal .p-role{font-size:12px;color:#ffd700}
-        .profile-modal .modal .p-btn{margin-top:16px}
-        .profile-modal .modal .p-btn button{background:#5288c1;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer}
-        /* Лог */
-        #log{background:#1f1f1f;padding:8px 12px;border-top:1px solid #333;font-size:12px;color:#888;max-height:80px;overflow-y:auto;white-space:pre-wrap;font-family:monospace}
-        @media(max-width:600px){.sidebar{width:100%;max-height:35vh}.mid{flex-direction:column}.chat{height:65vh}}
-    </style>
+    <title>KirmelCrypt | P2P Messenger & Social Platform</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<!-- АВТОРИЗАЦИЯ -->
-<div id="auth">
-    <div class="card">
-        <h1>🔐 KirmelChat</h1>
-        <p>Безопасный P2P-мессенджер</p>
-        <button id="loginBtn">Войти через Google</button>
-        <div class="err" id="authError"></div>
-    </div>
-</div>
-
-<!-- ПРИЛОЖЕНИЕ -->
-<div id="app">
-    <div class="top">
-        <div class="user">
-            <img class="avatar" id="myAvatar" src="">
-            <div>
-                <div class="name" id="myName">Загрузка...</div>
-                <div class="id" id="myIdDisplay">ID: ...</div>
+    <div id="app">
+        <!-- THEME TOGGLE (Top Right) -->
+        <button id="themeToggle" class="theme-toggle" title="Toggle theme">🌙</button>
+        
+        <!-- ADMIN PANEL BUTTON (Top Right) -->
+        <button id="adminPanelBtn" class="admin-panel-btn hidden" title="Admin Panel">⚙️</button>
+        
+        <!-- LOADING SPINNER -->
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+        </div>
+        
+        <!-- LANDING PAGE -->
+        <section id="landing" class="screen">
+            <div class="container">
+                <div class="logo-container">
+                    <div class="logo">🔐</div>
+                    <h1>KirmelCrypt</h1>
+                    <p class="tagline">Private. Secure. Peer-to-Peer.</p>
+                </div>
+                <div class="features">
+                    <div class="feature">
+                        <span class="icon">🔒</span>
+                        <h3>E2EE Encryption</h3>
+                        <p>End-to-End encrypted messages</p>
+                    </div>
+                    <div class="feature">
+                        <span class="icon">👥</span>
+                        <h3>P2P Network</h3>
+                        <p>Direct peer connections</p>
+                    </div>
+                    <div class="feature">
+                        <span class="icon">⚡</span>
+                        <h3>Serverless</h3>
+                        <p>Powered by Firebase</p>
+                    </div>
+                </div>
+                <div class="auth-buttons">
+                    <button id="signUpBtn" class="btn btn-primary">Sign Up</button>
+                    <button id="signInBtn" class="btn btn-secondary">Sign In</button>
+                </div>
+            </div>
+        </section>
+        
+        <!-- AUTH PAGE -->
+        <section id="authPage" class="screen hidden">
+            <div class="container auth-container">
+                <button class="back-btn" id="backFromAuth">← Back</button>
+                <div class="auth-box">
+                    <h2 id="authTitle">Sign Up</h2>
+                    <form id="authForm">
+                        <input type="email" id="authEmail" placeholder="Email" required>
+                        <input type="password" id="authPassword" placeholder="Password (min 6)" required>
+                        <div id="confirmPasswordDiv" class="hidden">
+                            <input type="password" id="authConfirmPassword" placeholder="Confirm Password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Sign Up</button>
+                    </form>
+                    <p id="toggleAuthMode" class="toggle-auth">Already have an account? <span>Sign In</span></p>
+                    <div id="authError" class="error hidden"></div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- MESSENGER PAGE -->
+        <section id="messenger" class="screen hidden">
+            <div class="messenger-container">
+                <!-- Sidebar -->
+                <aside class="sidebar">
+                    <div class="sidebar-header">
+                        <h2>Chats</h2>
+                        <button id="newChatBtn" class="btn-icon" title="New Chat">➕</button>
+                    </div>
+                    <div id="chatsList" class="chats-list">
+                        <!-- Dynamically populated -->
+                    </div>
+                </aside>
+                
+                <!-- Main Chat -->
+                <main class="chat-main">
+                    <div id="chatEmpty" class="chat-empty">
+                        <p>Select a chat to start messaging</p>
+                    </div>
+                    <div id="chatWindow" class="chat-window hidden">
+                        <div class="chat-header">
+                            <h3 id="chatTitle">Chat</h3>
+                            <button id="profileBtn" class="btn-icon" title="Profile">👤</button>
+                        </div>
+                        <div id="messagesContainer" class="messages-container">
+                            <!-- Messages loaded here -->
+                        </div>
+                        <form id="messageForm" class="message-form">
+                            <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off">
+                            <button type="submit" class="btn-icon" title="Send">✈️</button>
+                        </form>
+                    </div>
+                </main>
+            </div>
+        </section>
+        
+        <!-- PROFILE PAGE -->
+        <section id="profilePage" class="screen hidden">
+            <div class="container profile-container">
+                <button class="back-btn" id="backFromProfile">← Back</button>
+                <div class="profile-box">
+                    <h2>My Profile</h2>
+                    <div class="avatar-section">
+                        <img id="avatarPreview" class="avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23ddd'/%3E%3Ccircle cx='50' cy='35' r='15' fill='%23999'/%3E%3Cellipse cx='50' cy='65' rx='25' ry='20' fill='%23999'/%3E%3C/svg%3E" alt="Avatar">
+                        <input type="file" id="avatarInput" accept="image/*" hidden>
+                        <button type="button" id="uploadAvatarBtn" class="btn btn-secondary">Upload Avatar</button>
+                    </div>
+                    <form id="profileForm">
+                        <input type="text" id="nicknameInput" placeholder="Nickname" maxlength="30" required>
+                        <textarea id="bioInput" placeholder="Bio" maxlength="150"></textarea>
+                        <button type="submit" class="btn btn-primary">Save Profile</button>
+                    </form>
+                    <button id="logoutBtn" class="btn btn-danger">Logout</button>
+                    <div id="profileError" class="error hidden"></div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- ADMIN MODAL -->
+        <div id="adminModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Admin Panel</h2>
+                    <button class="close-modal" id="closeAdminModal">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="admin-tabs">
+                        <button class="tab-btn active" data-tab="users">Users</button>
+                        <button class="tab-btn" data-tab="banned">Banned</button>
+                        <button class="tab-btn" data-tab="roles">Roles</button>
+                    </div>
+                    
+                    <!-- Users Tab -->
+                    <div id="usersTab" class="tab-content active">
+                        <div class="search-box">
+                            <input type="text" id="userSearch" placeholder="Search users...">
+                        </div>
+                        <div id="usersList" class="users-list">
+                            <!-- Users loaded dynamically -->
+                        </div>
+                    </div>
+                    
+                    <!-- Banned Tab -->
+                    <div id="bannedTab" class="tab-content hidden">
+                        <div id="bannedList" class="banned-list">
+                            <!-- Banned users loaded dynamically -->
+                        </div>
+                    </div>
+                    
+                    <!-- Roles Tab -->
+                    <div id="rolesTab" class="tab-content hidden">
+                        <div id="rolesList" class="roles-list">
+                            <!-- Roles loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div style="display:flex;gap:12px;">
-            <span class="id" id="logoutBtn" style="cursor:pointer;">🚪</span>
-        </div>
-    </div>
-    <div class="mid">
-        <div class="sidebar">
-            <div class="find">
-                <input type="text" id="peerInput" placeholder="Введите ID друга">
-                <button id="connectBtn">➕</button>
-            </div>
-            <div class="list" id="chatsList">
-                <div class="empty">💬 Нет чатов</div>
-            </div>
-            <div class="admin-panel" id="adminPanel">
-                <h4>👑 Админ</h4>
-                <input type="text" id="adminUserId" placeholder="ID пользователя">
-                <div class="row">
-                    <button class="danger" id="banBtn">🚫 Бан</button>
-                    <button class="success" id="unbanBtn">✅ Разбан</button>
-                    <button class="warning" id="makeAdminBtn">⭐ Назначить админа</button>
+        
+        <!-- BAN ACTION MODAL -->
+        <div id="banModal" class="modal hidden">
+            <div class="modal-content ban-modal-content">
+                <div class="modal-header">
+                    <h2>Ban User</h2>
+                    <button class="close-modal" id="closeBanModal">✕</button>
                 </div>
-                <button class="info" id="showUsersBtn" style="width:100%;margin-top:4px;">📋 Список</button>
-                <div class="list" id="adminUsersList"></div>
-            </div>
-        </div>
-        <div class="chat">
-            <div class="head" id="chatHead" style="display:none;">
-                <img class="avatar" id="chatAvatar" src="">
-                <div>
-                    <div class="name" id="chatName">Собеседник</div>
-                    <div class="status" id="chatStatus">Подключение...</div>
-                </div>
-                <div style="margin-left:auto;display:flex;gap:8px;">
-                    <button style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;" id="profileBtn">👤</button>
-                </div>
-            </div>
-            <div class="msgs" id="msgContainer">
-                <div class="empty-chat" style="text-align:center;color:#888;margin:auto;">
-                    <span style="font-size:48px;display:block;margin-bottom:16px;">🔐</span>
-                    <h3>Безопасный чат</h3>
-                    <p>Введите ID друга для начала</p>
-                </div>
-            </div>
-            <div class="bottom" id="inputArea" style="display:none;">
-                <input type="text" id="msgInput" placeholder="Напишите сообщение...">
-                <button id="sendBtn">➤</button>
-                <button id="debugBtn" style="background:#555;border:none;border-radius:50%;width:40px;height:40px;color:#fff;font-size:14px;cursor:pointer;">📋</button>
+                <form id="banForm">
+                    <div class="form-group">
+                        <label for="banReason">Reason</label>
+                        <textarea id="banReason" placeholder="Why is this user banned?" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="banType">Ban Type</label>
+                        <select id="banType" required>
+                            <option value="">Select...</option>
+                            <option value="temporary">Temporary (24h)</option>
+                            <option value="permanent">Permanent</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="banPenalty">Penalty</label>
+                        <input type="text" id="banPenalty" placeholder="e.g., -50 reputation">
+                    </div>
+                    <button type="submit" class="btn btn-danger">Confirm Ban</button>
+                </form>
             </div>
         </div>
     </div>
-    <div id="log">📋 Лог: Ожидание действий...</div>
-</div>
-
-<!-- ПРОФИЛЬ -->
-<div class="profile-modal" id="profileModal">
-    <div class="modal">
-        <div class="close" id="profileClose">✕</div>
-        <img id="pAvatar" src="">
-        <div class="p-name" id="pName">Имя</div>
-        <div class="p-id" id="pId">ID: ...</div>
-        <div class="p-status" id="pStatus">Статус</div>
-        <div class="p-role" id="pRole">Роль</div>
-        <div class="p-btn"><button id="pChatBtn">💬 Написать</button></div>
-    </div>
-</div>
-
-<script>
-// ============================================================
-// ЛОГ
-// ============================================================
-function log(msg) {
-    const el = document.getElementById('log');
-    if (el) {
-        el.textContent += '\n' + new Date().toLocaleTimeString() + ' ' + msg;
-        el.scrollTop = el.scrollHeight;
-    }
-    console.log(msg);
-}
-
-// ============================================================
-// FIREBASE
-// ============================================================
-const firebaseConfig = {
-    apiKey: "AIzaSyCpqM2Mbz_0l1hB5BLgQ80F8GYFKdSw3PA",
-    authDomain: "kirmelcript.firebaseapp.com",
-    projectId: "kirmelcript",
-    storageBucket: "kirmelcript.firebasestorage.app",
-    messagingSenderId: "668992683850",
-    appId: "1:668992683850:web:c2f76667fafac7cd714bb3",
-    measurementId: "G-MD938Z2WX6"
-};
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.database();
-
-// ============================================================
-// ПЕРЕМЕННЫЕ
-// ============================================================
-let myId = null;
-let chatWith = null;
-let currentUser = null;
-let isAdmin = false;
-let isCreator = false;
-let loaded = new Set();
-
-// ============================================================
-// DOM
-// ============================================================
-const $ = id => document.getElementById(id);
-
-// ============================================================
-// 1. ВХОД
-// ============================================================
-$('loginBtn').onclick = () => {
-    log('Нажата кнопка входа');
-    const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider).catch(err => {
-        $('authError').textContent = err.message;
-        $('authError').style.display = 'block';
-        log('Ошибка входа: ' + err.message);
-    });
-};
-
-auth.onAuthStateChanged(user => {
-    if (user) {
-        log('Пользователь авторизован: ' + user.displayName);
-        currentUser = user;
-        $('auth').style.display = 'none';
-        $('app').style.display = 'flex';
-        
-        myId = user.uid;
-        $('myAvatar').src = user.photoURL || '';
-        $('myName').textContent = user.displayName || 'Аноним';
-        $('myIdDisplay').textContent = `ID: ${myId.substring(0,12)} (клик)`;
-        $('myIdDisplay').onclick = () => {
-            navigator.clipboard.writeText(myId.substring(0,12));
-            alert('✅ ID скопирован!');
-            log('ID скопирован');
-        };
-        
-        db.ref('users/' + myId).set({
-            name: user.displayName,
-            avatar: user.photoURL,
-            online: true
-        }).then(() => log('Пользователь сохранен в Firebase'));
-        
-        loadChats();
-        listenMessages();
-        checkAdmin();
-        log('Готово, слушаем сообщения');
-    } else {
-        log('Пользователь не авторизован');
-        $('auth').style.display = 'flex';
-        $('app').style.display = 'none';
-    }
-});
-
-// ============================================================
-// 2. ВЫХОД
-// ============================================================
-$('logoutBtn').onclick = () => {
-    auth.signOut();
-    location.reload();
-};
-
-// ============================================================
-// 3. ПОКАЗ СООБЩЕНИЙ
-// ============================================================
-function renderMessages(peerId) {
-    log('renderMessages для ' + peerId);
-    const container = $('msgContainer');
-    if (!container) { log('Ошибка: контейнер сообщений не найден'); return; }
-    container.innerHTML = '';
-    loaded.clear();
-    chatWith = peerId;
     
-    const path = 'messages/' + myId + '/' + peerId;
-    log('Читаем путь: ' + path);
-    db.ref(path).once('value', snap => {
-        const data = snap.val();
-        log('Получены данные: ' + (data ? Object.keys(data).length + ' записей' : 'нет данных'));
-        if (data) {
-            const msgs = Object.values(data).sort((a,b) => (a.timestamp||0) - (b.timestamp||0));
-            let lastDate = '';
-            msgs.forEach(m => {
-                if (m && m.text) {
-                    const date = new Date(m.timestamp || Date.now());
-                    const dateStr = date.toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
-                    if (dateStr !== lastDate) {
-                        const sep = document.createElement('div');
-                        sep.style.cssText = 'text-align:center;color:#888;font-size:12px;padding:12px 0 8px;width:100%;';
-                        sep.textContent = dateStr;
-                        container.appendChild(sep);
-                        lastDate = dateStr;
-                    }
-                    const div = document.createElement('div');
-                    div.className = 'msg ' + (m.from === myId ? 'out' : 'in');
-                    const timeStr = date.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
-                    div.innerHTML = `<div>${m.text}</div><div class="time">${timeStr}</div>`;
-                    container.appendChild(div);
-                }
-            });
-            container.scrollTop = container.scrollHeight;
-            log('Загружено ' + msgs.length + ' сообщений');
-        } else {
-            log('Нет сообщений в этом чате');
-            // Показываем пустое состояние
-            container.innerHTML = '<div style="text-align:center;color:#888;margin:auto;"><span style="font-size:48px;display:block;margin-bottom:16px;">🔐</span><h3>Нет сообщений</h3><p>Напишите первое сообщение</p></div>';
-        }
-    }).catch(err => {
-        log('Ошибка чтения: ' + err.message);
-    });
-}
-
-// ============================================================
-// 4. СЛУШАТЕЛЬ НОВЫХ СООБЩЕНИЙ
-// ============================================================
-function listenMessages() {
-    log('Запуск слушателя для ' + myId);
-    db.ref('messages/' + myId).on('child_added', snap => {
-        const data = snap.val();
-        const fromId = snap.key;
-        if (!data || !data.text || data.from === myId) return;
-        log('Новое сообщение от ' + fromId + ': ' + data.text);
-        
-        if (chatWith && chatWith === fromId) {
-            const container = $('msgContainer');
-            if (!container) return;
-            
-            const date = new Date(data.timestamp || Date.now());
-            const dateStr = date.toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
-            const separators = container.querySelectorAll('div[style*="text-align:center"]');
-            let lastSep = separators[separators.length-1];
-            if (!lastSep || lastSep.textContent !== dateStr) {
-                const sep = document.createElement('div');
-                sep.style.cssText = 'text-align:center;color:#888;font-size:12px;padding:12px 0 8px;width:100%;';
-                sep.textContent = dateStr;
-                container.appendChild(sep);
-            }
-            const div = document.createElement('div');
-            div.className = 'msg in';
-            const timeStr = date.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
-            div.innerHTML = `<div>${data.text}</div><div class="time">${timeStr}</div>`;
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
-            
-            updateLast(fromId, data.text);
-        }
-        
-        db.ref('users/' + fromId).once('value', s => {
-            const u = s.val();
-            if (u) saveChat(fromId, u.name, u.avatar);
-        });
-    });
-}
-
-// ============================================================
-// 5. ЧАТЫ
-// ============================================================
-function loadChats() {
-    db.ref('chats/' + myId).on('value', snap => {
-        const data = snap.val();
-        const list = $('chatsList');
-        list.innerHTML = '';
-        if (!data) {
-            list.innerHTML = '<div class="empty">💬 Нет чатов</div>';
-            return;
-        }
-        const arr = Object.values(data).sort((a,b) => (b.timestamp||0) - (a.timestamp||0));
-        arr.forEach(chat => {
-            const div = document.createElement('div');
-            div.className = 'item';
-            if (chat.peerId === chatWith) div.classList.add('active');
-            div.dataset.id = chat.peerId;
-            div.innerHTML = `
-                <img class="avatar" src="${chat.avatar || ''}" style="width:36px;height:36px;border-radius:50%;background:#333;">
-                <div class="info">
-                    <div class="name">${chat.name}</div>
-                    <div class="last">${chat.lastMessage || 'Новый чат'}</div>
-                </div>
-            `;
-            div.onclick = () => openChat(chat.peerId);
-            list.appendChild(div);
-        });
-    });
-}
-
-function saveChat(peerId, name, avatar) {
-    db.ref('chats/' + myId + '/' + peerId).once('value', snap => {
-        if (!snap.exists()) {
-            db.ref('chats/' + myId + '/' + peerId).set({
-                peerId, name: name || 'Собеседник', avatar: avatar || '', lastMessage: '', timestamp: Date.now()
-            });
-        }
-    });
-}
-
-function updateLast(peerId, text) {
-    db.ref('chats/' + myId + '/' + peerId).update({
-        lastMessage: text.substring(0,50),
-        timestamp: Date.now()
-    });
-}
-
-// ============================================================
-// 6. ОТКРЫТЬ ЧАТ
-// ============================================================
-function openChat(peerId) {
-    log('openChat ' + peerId);
-    chatWith = peerId;
-    $('peerInput').value = peerId;
-    $('chatHead').style.display = 'flex';
-    $('inputArea').style.display = 'flex';
-    $('chatName').textContent = 'Загрузка...';
-    $('chatAvatar').src = '';
-    $('chatStatus').textContent = 'Онлайн ✅';
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js"></script>
     
-    const empty = document.querySelector('.empty-chat');
-    if (empty) empty.style.display = 'none';
-    
-    db.ref('users/' + peerId).once('value', snap => {
-        const user = snap.val();
-        if (user) {
-            $('chatName').textContent = user.name || 'Собеседник';
-            $('chatAvatar').src = user.avatar || '';
-        }
-    });
-    
-    document.querySelectorAll('.item').forEach(el => el.classList.remove('active'));
-    const item = document.querySelector(`.item[data-id="${peerId}"]`);
-    if (item) item.classList.add('active');
-    
-    renderMessages(peerId);
-}
-
-// ============================================================
-// 7. ПОДКЛЮЧИТЬСЯ
-// ============================================================
-$('connectBtn').onclick = async () => {
-    const target = $('peerInput').value.trim();
-    if (!target) return alert('Введите ID');
-    if (target === myId) return alert('Нельзя к себе');
-    log('Подключение к ' + target);
-    
-    const snap = await db.ref('users/' + target).once('value');
-    if (!snap.exists()) { alert('Пользователь не найден'); log('Пользователь не найден'); return; }
-    
-    const user = snap.val();
-    saveChat(target, user.name, user.avatar);
-    openChat(target);
-};
-
-// ============================================================
-// 8. ОТПРАВИТЬ
-// ============================================================
-$('sendBtn').onclick = () => {
-    const text = $('msgInput').value.trim();
-    if (!text) return alert('Введите сообщение');
-    if (!chatWith) return alert('Нет собеседника');
-    log('Отправка: ' + text);
-    
-    const ts = Date.now();
-    db.ref('messages/' + chatWith + '/' + myId).push().set({
-        from: myId, text, name: currentUser.displayName, timestamp: ts
-    });
-    db.ref('messages/' + myId + '/' + chatWith).push().set({
-        from: myId, text, name: currentUser.displayName, timestamp: ts
-    });
-    
-    // Показываем сразу
-    const container = $('msgContainer');
-    const date = new Date(ts);
-    const dateStr = date.toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
-    const separators = container.querySelectorAll('div[style*="text-align:center"]');
-    let lastSep = separators[separators.length-1];
-    if (!lastSep || lastSep.textContent !== dateStr) {
-        const sep = document.createElement('div');
-        sep.style.cssText = 'text-align:center;color:#888;font-size:12px;padding:12px 0 8px;width:100%;';
-        sep.textContent = dateStr;
-        container.appendChild(sep);
-    }
-    const div = document.createElement('div');
-    div.className = 'msg out';
-    const timeStr = date.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
-    div.innerHTML = `<div>${text}</div><div class="time">${timeStr}</div>`;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-    
-    updateLast(chatWith, text);
-    $('msgInput').value = '';
-};
-
-$('msgInput').onkeydown = e => {
-    if (e.key === 'Enter') $('sendBtn').click();
-};
-
-// ============================================================
-// 9. ДЕБАГ - ПРИНУДИТЕЛЬНАЯ ЗАГРУЗКА
-// ============================================================
-$('debugBtn').onclick = () => {
-    if (!chatWith) {
-        alert('Сначала откройте чат');
-        return;
-    }
-    log('Принудительная загрузка сообщений для ' + chatWith);
-    renderMessages(chatWith);
-};
-
-// ============================================================
-// 10. ПРОФИЛЬ
-// ============================================================
-function showProfile(userId) {
-    db.ref('users/' + userId).once('value', async snap => {
-        const user = snap.val();
-        if (!user) return;
-        $('pAvatar').src = user.avatar || '';
-        $('pName').textContent = user.name || 'Без имени';
-        $('pId').textContent = 'ID: ' + userId.substring(0,12);
-        $('pStatus').textContent = user.online ? '🟢 Онлайн' : '⚫ Офлайн';
-        const role = await getUserRole(userId);
-        $('pRole').textContent = role === 'creator' ? '👑 Создатель' : role === 'admin' ? '⭐ Админ' : 'Пользователь';
-        $('profileModal').style.display = 'flex';
-    });
-}
-
-$('profileBtn').onclick = () => { if (chatWith) showProfile(chatWith); };
-$('profileClose').onclick = () => $('profileModal').style.display = 'none';
-$('profileModal').onclick = e => { if (e.target === e.currentTarget) $('profileModal').style.display = 'none'; };
-$('pChatBtn').onclick = () => {
-    $('profileModal').style.display = 'none';
-    if (chatWith) openChat(chatWith);
-};
-
-// ============================================================
-// 11. РОЛИ
-// ============================================================
-async function checkAdmin() {
-    const c = await db.ref('creator').once('value');
-    if (c.exists() && c.val() === myId) { isCreator = true; isAdmin = true; }
-    else {
-        const a = await db.ref('admins/' + myId).once('value');
-        if (a.exists()) isAdmin = true;
-    }
-    if (isAdmin || isCreator) $('adminPanel').style.display = 'block';
-}
-
-async function getUserRole(userId) {
-    const c = await db.ref('creator').once('value');
-    if (c.exists() && c.val() === userId) return 'creator';
-    const a = await db.ref('admins/' + userId).once('value');
-    if (a.exists()) return 'admin';
-    return 'user';
-}
-
-async function isBanned(userId) {
-    const s = await db.ref('banned/' + userId).once('value');
-    return s.exists();
-}
-
-$('banBtn').onclick = async () => {
-    const id = $('adminUserId').value.trim();
-    if (!id) return alert('Введите ID');
-    if (!isAdmin && !isCreator) return alert('Нет прав');
-    await db.ref('banned/' + id).set({ bannedAt: Date.now(), reason: 'Нарушение', bannedBy: myId });
-    alert('✅ Забанен');
-};
-$('unbanBtn').onclick = async () => {
-    const id = $('adminUserId').value.trim();
-    if (!id) return alert('Введите ID');
-    if (!isAdmin && !isCreator) return alert('Нет прав');
-    await db.ref('banned/' + id).remove();
-    alert('✅ Разбанен');
-};
-$('makeAdminBtn').onclick = async () => {
-    const id = $('adminUserId').value.trim();
-    if (!id) return alert('Введите ID');
-    if (!isCreator) return alert('Только создатель');
-    const snap = await db.ref('users/' + id).once('value');
-    if (!snap.exists()) return alert('Пользователь не найден');
-    await db.ref('admins/' + id).set({ role: 'admin', name: snap.val().name, addedAt: Date.now() });
-    alert('✅ Админ назначен');
-};
-$('showUsersBtn').onclick = async () => {
-    if (!isAdmin && !isCreator) return alert('Нет прав');
-    const snap = await db.ref('users').once('value');
-    const users = snap.val();
-    let html = '';
-    for (const [id, user] of Object.entries(users || {})) {
-        const banned = await isBanned(id);
-        html += `<div><span>${user.name || 'Без имени'}</span><span>${banned ? '🚫' : '✅'}</span></div>`;
-    }
-    $('adminUsersList').innerHTML = html || '<div style="color:#888;">Нет пользователей</div>';
-};
-
-log('✅ KirmelChat загружен!');
-</script>
+    <!-- App Scripts -->
+    <script src="index.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

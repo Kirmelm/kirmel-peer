@@ -1,414 +1,352 @@
-const firebaseConfig = {
-    apiKey: "AIzaSyCpqM2Mbz_0l1hB5BLgQ80F8GYFKdSw3PA",
-    authDomain: "kirmelcript.firebaseapp.com",
-    projectId: "kirmelcript",
-    storageBucket: "kirmelcript.firebasestorage.app",
-    messagingSenderId: "668992683850",
-    appId: "1:668992683850:web:c2f76667fafac7cd714bb3",
-    measurementId: "G-MD938Z2WX6"
-};
+// ============ THEME MANAGEMENT ============
 
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const database = firebase.database();
+const THEME_KEY = "kirmel_theme";
 
-let myId = null;
-let chatWith = null;
-let currentUser = null;
+function initTheme() {
+    const savedTheme = localStorage.getItem(THEME_KEY) || "dark";
+    document.documentElement.setAttribute("data-theme", savedTheme);
+    updateThemeButton(savedTheme);
+}
 
-const btnLogin = document.getElementById('btn-login');
-const errorMessage = document.getElementById('error-message');
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute("data-theme");
+    const newTheme = currentTheme === "dark" ? "light" : "dark";
+    
+    document.documentElement.setAttribute("data-theme", newTheme);
+    localStorage.setItem(THEME_KEY, newTheme);
+    updateThemeButton(newTheme);
+}
 
-btnLogin.addEventListener('click', () => {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider).catch(err => {
-        errorMessage.textContent = err.message;
-        errorMessage.style.display = 'block';
-    });
+function updateThemeButton(theme) {
+    const btn = document.getElementById("themeToggle");
+    btn.textContent = theme === "dark" ? "☀️" : "🌙";
+}
+
+// ============ SCREEN NAVIGATION ============
+
+function showScreen(screenId) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.add("hidden"));
+    document.getElementById(screenId).classList.remove("hidden");
+}
+
+// ============ AUTH PAGE ============
+
+let isSignUpMode = true;
+
+document.getElementById("signUpBtn").addEventListener("click", () => {
+    isSignUpMode = true;
+    document.getElementById("authTitle").textContent = "Sign Up";
+    document.getElementById("authForm").querySelector("button").textContent = "Sign Up";
+    document.getElementById("confirmPasswordDiv").classList.remove("hidden");
+    document.getElementById("toggleAuthMode").querySelector("span").textContent = "Sign In";
+    showScreen("authPage");
 });
 
-auth.onAuthStateChanged(user => {
-    if (user) {
-        currentUser = user;
-        const authScreen = document.getElementById('auth-screen');
-        const appScreen = document.getElementById('app-screen');
-        if (authScreen) authScreen.style.display = 'none';
-        if (appScreen) appScreen.style.display = 'block';
-        
-        myId = user.uid;
-        
-        const avatar = document.getElementById('my-avatar');
-        if (avatar) avatar.src = user.photoURL || '';
-        
-        const name = document.getElementById('my-name');
-        if (name) name.textContent = user.displayName || 'Аноним';
-        
-        const idDisplay = document.getElementById('my-id-display');
-        if (idDisplay) {
-            idDisplay.textContent = `ID: ${myId.substring(0, 12)} (клик)`;
-            idDisplay.onclick = () => {
-                navigator.clipboard.writeText(myId.substring(0, 12));
-                alert('✅ ID скопирован!');
-            };
-        }
-        
-        database.ref('users/' + myId).set({
-            name: user.displayName,
-            avatar: user.photoURL,
-            online: true
-        });
-        
-        loadChats();
-        listenMessages();
-        checkAdmin();
+document.getElementById("signInBtn").addEventListener("click", () => {
+    isSignUpMode = false;
+    document.getElementById("authTitle").textContent = "Sign In";
+    document.getElementById("authForm").querySelector("button").textContent = "Sign In";
+    document.getElementById("confirmPasswordDiv").classList.add("hidden");
+    document.getElementById("toggleAuthMode").querySelector("span").textContent = "Sign Up";
+    showScreen("authPage");
+});
+
+document.getElementById("toggleAuthMode").addEventListener("click", () => {
+    isSignUpMode = !isSignUpMode;
+    if (isSignUpMode) {
+        document.getElementById("authTitle").textContent = "Sign Up";
+        document.getElementById("authForm").querySelector("button").textContent = "Sign Up";
+        document.getElementById("confirmPasswordDiv").classList.remove("hidden");
+        document.getElementById("toggleAuthMode").querySelector("span").textContent = "Sign In";
     } else {
-        const authScreen = document.getElementById('auth-screen');
-        const appScreen = document.getElementById('app-screen');
-        if (authScreen) authScreen.style.display = 'flex';
-        if (appScreen) appScreen.style.display = 'none';
+        document.getElementById("authTitle").textContent = "Sign In";
+        document.getElementById("authForm").querySelector("button").textContent = "Sign In";
+        document.getElementById("confirmPasswordDiv").classList.add("hidden");
+        document.getElementById("toggleAuthMode").querySelector("span").textContent = "Sign Up";
     }
 });
 
-// ===== ПОКАЗ СООБЩЕНИЙ =====
-function showMessage(text, who, time) {
-    const container = document.getElementById('messages-container');
-    if (!container) return;
+document.getElementById("authForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
     
-    const div = document.createElement('div');
-    div.className = 'message ' + who;
-    const t = new Date(time || Date.now()).toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
-    div.innerHTML = `<div>${text}</div><div class="message-time">${t}</div>`;
-    container.appendChild(div);
+    const email = document.getElementById("authEmail").value.trim();
+    const password = document.getElementById("authPassword").value;
+    const confirmPassword = document.getElementById("authConfirmPassword").value;
+    
+    if (isSignUpMode && password !== confirmPassword) {
+        showError("authError", "Passwords don't match");
+        return;
+    }
+    
+    try {
+        showLoading(true);
+        if (isSignUpMode) {
+            await signUp(email, password);
+        } else {
+            await signIn(email, password);
+        }
+        showLoading(false);
+        showScreen("messenger");
+    } catch (error) {
+        showLoading(false);
+        showError("authError", error.message);
+    }
+});
+
+document.getElementById("backFromAuth").addEventListener("click", () => {
+    showScreen("landing");
+});
+
+// ============ PROFILE PAGE ============
+
+document.getElementById("profileBtn").addEventListener("click", () => {
+    showScreen("profilePage");
+    loadProfile();
+});
+
+document.getElementById("backFromProfile").addEventListener("click", () => {
+    showScreen("messenger");
+});
+
+document.getElementById("uploadAvatarBtn").addEventListener("click", () => {
+    document.getElementById("avatarInput").click();
+});
+
+document.getElementById("avatarInput").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    try {
+        showLoading(true);
+        const url = await uploadAvatar(file);
+        document.getElementById("avatarPreview").src = url;
+        showLoading(false);
+    } catch (error) {
+        showLoading(false);
+        showError("profileError", error.message);
+    }
+});
+
+document.getElementById("profileForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    
+    const nickname = document.getElementById("nicknameInput").value.trim();
+    const bio = document.getElementById("bioInput").value.trim();
+    
+    if (!nickname) {
+        showError("profileError", "Nickname is required");
+        return;
+    }
+    
+    try {
+        showLoading(true);
+        await updateUserProfile(nickname, bio);
+        showLoading(false);
+        alert("Profile updated!");
+        showScreen("messenger");
+    } catch (error) {
+        showLoading(false);
+        showError("profileError", error.message);
+    }
+});
+
+async function loadProfile() {
+    try {
+        const userDoc = await db.collection("users").doc(currentUser.uid).get();
+        const userData = userDoc.data();
+        
+        document.getElementById("nicknameInput").value = userData.nickname || "";
+        document.getElementById("bioInput").value = userData.bio || "";
+        if (userData.avatar) {
+            document.getElementById("avatarPreview").src = userData.avatar;
+        }
+    } catch (error) {
+        showError("profileError", error.message);
+    }
+}
+
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+    try {
+        await logOut();
+        showScreen("landing");
+    } catch (error) {
+        showError("profileError", error.message);
+    }
+});
+
+// ============ ADMIN PANEL ============
+
+document.getElementById("adminPanelBtn").addEventListener("click", () => {
+    document.getElementById("adminModal").classList.remove("hidden");
+    loadAdminPanel();
+});
+
+document.getElementById("closeAdminModal").addEventListener("click", () => {
+    document.getElementById("adminModal").classList.add("hidden");
+});
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        const tabName = btn.getAttribute("data-tab");
+        switchTab(tabName);
+    });
+});
+
+function switchTab(tabName) {
+    document.querySelectorAll(".tab-content").forEach(t => t.classList.add("hidden"));
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    
+    document.getElementById(tabName + "Tab").classList.remove("hidden");
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add("active");
+}
+
+async function loadAdminPanel() {
+    try {
+        const users = await getUsers();
+        renderUsersList(users);
+        
+        const banned = await getBannedUsers();
+        renderBannedList(banned);
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+function renderUsersList(users) {
+    const list = document.getElementById("usersList");
+    list.innerHTML = users.map(user => `
+        <div class="user-item">
+            <div class="user-info">
+                <img src="${user.avatar || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ccircle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%23ddd%22/%3E%3C/svg%3E'}" class="user-avatar" alt="${user.nickname}">
+                <div>
+                    <p class="user-nickname">${user.nickname}</p>
+                    <p class="user-email">${user.email}</p>
+                </div>
+            </div>
+            <button class="btn-icon ban-btn" onclick="openBanModal('${user.uid}', '${user.nickname}')">⛔</button>
+        </div>
+    `).join("");
+}
+
+function renderBannedList(banned) {
+    const list = document.getElementById("bannedList");
+    list.innerHTML = banned.map(ban => `
+        <div class="banned-item">
+            <p><strong>User ID:</strong> ${ban.userId}</p>
+            <p><strong>Reason:</strong> ${ban.reason}</p>
+            <p><strong>Type:</strong> ${ban.banType}</p>
+            <p><strong>Penalty:</strong> ${ban.penalty || "N/A"}</p>
+            <p><small>Banned by: ${ban.bannedBy}</small></p>
+        </div>
+    `).join("");
+}
+
+function openBanModal(userId, nickname) {
+    document.getElementById("banModal").classList.remove("hidden");
+    document.getElementById("banForm").dataset.userId = userId;
+}
+
+document.getElementById("closeBanModal").addEventListener("click", () => {
+    document.getElementById("banModal").classList.add("hidden");
+});
+
+document.getElementById("banForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    
+    const userId = e.target.dataset.userId;
+    const reason = document.getElementById("banReason").value.trim();
+    const banType = document.getElementById("banType").value;
+    const penalty = document.getElementById("banPenalty").value.trim();
+    
+    try {
+        await banUser(userId, reason, banType, penalty);
+        alert("User banned!");
+        document.getElementById("banModal").classList.add("hidden");
+        document.getElementById("banForm").reset();
+        loadAdminPanel();
+    } catch (error) {
+        alert(error.message);
+    }
+});
+
+// ============ MESSAGING ============
+
+document.getElementById("newChatBtn").addEventListener("click", () => {
+    const userId = prompt("Enter user ID to chat:");
+    if (userId) {
+        startChat(userId);
+    }
+});
+
+function startChat(userId) {
+    currentChatId = [currentUser.uid, userId].sort().join("_");
+    document.getElementById("chatEmpty").classList.add("hidden");
+    document.getElementById("chatWindow").classList.remove("hidden");
+    loadMessages();
+}
+
+async function loadMessages() {
+    try {
+        const messages = await getMessages(currentChatId);
+        renderMessages(messages);
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+function renderMessages(messages) {
+    const container = document.getElementById("messagesContainer");
+    container.innerHTML = messages.map(msg => {
+        const isOwn = msg.senderId === currentUser.uid;
+        return `
+            <div class="message ${isOwn ? 'own' : 'other'}">
+                <p class="message-text">${escapeHtml(msg.text.ciphertext.substring(0, 50))}...</p>
+                <small>${new Date(msg.timestamp.toDate()).toLocaleTimeString()}</small>
+            </div>
+        `;
+    }).join("");
     container.scrollTop = container.scrollHeight;
 }
 
-// ===== СЛУШАТЕЛЬ =====
-function listenMessages() {
-    database.ref('messages/' + myId).on('child_added', snap => {
-        const data = snap.val();
-        if (!data || !data.text || data.from === myId) return;
-        
-        console.log('📩 Пришло:', data.text);
-        
-        if (chatWith && chatWith === snap.key) {
-            showMessage(data.text, 'in', data.timestamp);
-            updateLastMessage(snap.key, data.text);
-        }
-        
-        database.ref('users/' + snap.key).once('value', s => {
-            const u = s.val();
-            if (u) saveChat(snap.key, u.name, u.avatar);
-        });
-    });
-}
-
-// ===== ИСТОРИЯ =====
-function loadHistory(peerId) {
-    const container = document.getElementById('messages-container');
-    if (!container) return;
-    container.innerHTML = '';
-    chatWith = peerId;
+document.getElementById("messageForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
     
-    database.ref('messages/' + myId + '/' + peerId).once('value', snap => {
-        const data = snap.val();
-        if (data) {
-            Object.values(data).sort((a,b) => (a.timestamp||0) - (b.timestamp||0)).forEach(msg => {
-                if (msg && msg.text) {
-                    showMessage(msg.text, msg.from === myId ? 'out' : 'in', msg.timestamp);
-                }
-            });
-        }
-    });
-}
-
-// ===== ЧАТЫ =====
-function loadChats() {
-    database.ref('chats/' + myId).on('value', snap => {
-        const data = snap.val();
-        const list = document.getElementById('chats-list');
-        if (!list) return;
-        list.innerHTML = '';
-        if (!data) {
-            list.innerHTML = '<div class="empty-chats">💬<p>Нет чатов</p></div>';
-            return;
-        }
-        Object.values(data).sort((a,b) => (b.timestamp||0) - (a.timestamp||0)).forEach(chat => {
-            const div = document.createElement('div');
-            div.className = 'chat-item';
-            if (chat.peerId === chatWith) div.classList.add('active');
-            div.dataset.id = chat.peerId;
-            div.innerHTML = `
-                <img class="avatar" src="${chat.avatar || ''}">
-                <div class="user-info">
-                    <div class="user-name">${chat.name}</div>
-                    <div class="chat-status">${chat.lastMessage || 'Новый чат'}</div>
-                </div>
-            `;
-            div.onclick = () => openChat(chat.peerId);
-            list.appendChild(div);
-        });
-    });
-}
-
-function saveChat(peerId, name, avatar) {
-    database.ref('chats/' + myId + '/' + peerId).once('value', snap => {
-        if (!snap.exists()) {
-            database.ref('chats/' + myId + '/' + peerId).set({
-                peerId, name: name || 'Собеседник', avatar: avatar || '', lastMessage: '', timestamp: Date.now()
-            });
-        }
-    });
-}
-
-function updateLastMessage(peerId, text) {
-    database.ref('chats/' + myId + '/' + peerId).update({
-        lastMessage: text.substring(0, 50),
-        timestamp: Date.now()
-    });
-}
-
-// ===== ОТКРЫТИЕ ЧАТА (ИСПРАВЛЕНО) =====
-function openChat(peerId) {
-    chatWith = peerId;
+    const messageText = document.getElementById("messageInput").value.trim();
+    if (!messageText) return;
     
-    const input = document.getElementById('peer-id-input');
-    if (input) input.value = peerId;
-    
-    const placeholder = document.getElementById('system-placeholder');
-    if (placeholder) placeholder.style.display = 'none';
-    
-    const header = document.getElementById('active-chat-header');
-    if (header) header.style.display = 'flex';
-    
-    const inputArea = document.getElementById('input-area');
-    if (inputArea) inputArea.style.display = 'flex';
-    
-    const chatNameEl = document.getElementById('chat-name');
-    if (chatNameEl) chatNameEl.textContent = 'Загрузка...';
-    
-    const chatAvatarEl = document.getElementById('chat-avatar');
-    if (chatAvatarEl) chatAvatarEl.src = '';
-    
-    database.ref('users/' + peerId).once('value', snap => {
-        const user = snap.val();
-        if (user && chatNameEl) {
-            chatNameEl.textContent = user.name || 'Собеседник';
-        }
-        if (chatAvatarEl && user) {
-            chatAvatarEl.src = user.avatar || '';
-        }
-    });
-    
-    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-    const item = document.querySelector(`.chat-item[data-id="${peerId}"]`);
-    if (item) item.classList.add('active');
-    
-    const statusText = document.getElementById('chat-status-text');
-    if (statusText) statusText.textContent = 'Онлайн ✅';
-    
-    const dot = document.querySelector('.status-dot');
-    if (dot) dot.className = 'status-dot online';
-    
-    loadHistory(peerId);
-}
-
-// ===== КНОПКА ПОДКЛЮЧИТЬСЯ =====
-const btnConnect = document.getElementById('btn-connect');
-if (btnConnect) {
-    btnConnect.addEventListener('click', async () => {
-        const input = document.getElementById('peer-id-input');
-        const target = input ? input.value.trim() : '';
-        if (!target) return alert('Введите ID');
-        if (target === myId) return alert('Нельзя к себе');
-        
-        const snap = await database.ref('users/' + target).once('value');
-        if (!snap.exists()) return alert('Пользователь не найден');
-        
-        const user = snap.val();
-        saveChat(target, user.name, user.avatar);
-        openChat(target);
-    });
-}
-
-// ===== ОТПРАВКА =====
-const btnSend = document.getElementById('btn-send');
-if (btnSend) {
-    btnSend.addEventListener('click', () => {
-        const input = document.getElementById('message-input');
-        const text = input ? input.value.trim() : '';
-        if (!text) return alert('Введите сообщение');
-        if (!chatWith) return alert('Нет собеседника');
-        
-        const ts = Date.now();
-        database.ref('messages/' + chatWith + '/' + myId).push().set({
-            from: myId, text, name: currentUser.displayName, timestamp: ts
-        });
-        database.ref('messages/' + myId + '/' + chatWith).push().set({
-            from: myId, text, name: currentUser.displayName, timestamp: ts
-        });
-        
-        showMessage(text, 'out', ts);
-        updateLastMessage(chatWith, text);
-        if (input) input.value = '';
-    });
-}
-
-const msgInput = document.getElementById('message-input');
-if (msgInput) {
-    msgInput.addEventListener('keypress', e => {
-        if (e.key === 'Enter') {
-            const btn = document.getElementById('btn-send');
-            if (btn) btn.click();
-        }
-    });
-}
-
-// ===== ПРОФИЛЬ =====
-const headerClick = document.getElementById('chat-header-click');
-if (headerClick) {
-    headerClick.onclick = () => {
-        if (chatWith) showProfile(chatWith);
-    };
-}
-
-const profileBtn = document.getElementById('btn-profile');
-if (profileBtn) {
-    profileBtn.onclick = () => {
-        if (chatWith) showProfile(chatWith);
-    };
-}
-
-async function showProfile(userId) {
-    const snap = await database.ref('users/' + userId).once('value');
-    const user = snap.val();
-    if (!user) return;
-    
-    const avatar = document.getElementById('profile-avatar');
-    if (avatar) avatar.src = user.avatar || '';
-    
-    const name = document.getElementById('profile-name');
-    if (name) name.textContent = user.name || 'Без имени';
-    
-    const id = document.getElementById('profile-id');
-    if (id) id.textContent = 'ID: ' + userId.substring(0, 12);
-    
-    const status = document.getElementById('profile-status');
-    if (status) status.textContent = user.online ? '🟢 Онлайн' : '⚫ Офлайн';
-    
-    const modal = document.getElementById('profile-modal');
-    if (modal) modal.style.display = 'flex';
-}
-
-const modalClose = document.getElementById('profile-modal-close');
-if (modalClose) {
-    modalClose.onclick = () => {
-        const modal = document.getElementById('profile-modal');
-        if (modal) modal.style.display = 'none';
-    };
-}
-
-const modal = document.getElementById('profile-modal');
-if (modal) {
-    modal.onclick = e => {
-        if (e.target === e.currentTarget) {
-            modal.style.display = 'none';
-        }
-    };
-}
-
-const profileChat = document.getElementById('profile-chat');
-if (profileChat) {
-    profileChat.onclick = () => {
-        const modal = document.getElementById('profile-modal');
-        if (modal) modal.style.display = 'none';
-        if (chatWith) openChat(chatWith);
-    };
-}
-
-// ===== ЭМОДЗИ =====
-const emojiBtn = document.getElementById('btn-emoji');
-if (emojiBtn) {
-    emojiBtn.onclick = () => {
-        const input = document.getElementById('message-input');
-        if (!input) return;
-        const emojis = ['😊', '😂', '❤️', '🔥', '👍', '👋', '🎉', '✨', '💪', '🤝'];
-        input.value += emojis[Math.floor(Math.random() * emojis.length)];
-        input.focus();
-    };
-}
-
-// ===== АДМИНКА =====
-let isAdmin = false, isCreator = false;
-
-async function checkAdmin() {
-    const c = await database.ref('creator').once('value');
-    if (c.exists() && c.val() === myId) { isCreator = true; isAdmin = true; }
-    else {
-        const a = await database.ref('admins/' + myId).once('value');
-        if (a.exists()) isAdmin = true;
+    try {
+        const recipientId = currentChatId.split("_").find(id => id !== currentUser.uid);
+        await sendMessage(recipientId, messageText);
+        document.getElementById("messageInput").value = "";
+        loadMessages();
+    } catch (error) {
+        alert(error.message);
     }
-    const panel = document.getElementById('admin-panel');
-    if (panel && (isAdmin || isCreator)) {
-        panel.style.display = 'block';
-    }
+});
+
+// ============ UTILITIES ============
+
+function showLoading(show) {
+    document.getElementById("loading").classList.toggle("hidden", !show);
 }
 
-const banBtn = document.getElementById('btn-ban');
-if (banBtn) {
-    banBtn.onclick = async () => {
-        const input = document.getElementById('admin-user-id');
-        const id = input ? input.value.trim() : '';
-        if (!id) return alert('Введите ID');
-        if (!isAdmin && !isCreator) return alert('Нет прав');
-        await database.ref('banned/' + id).set({ bannedAt: Date.now(), reason: 'Нарушение', bannedBy: myId });
-        alert('✅ Забанен');
-    };
+function showError(elementId, message) {
+    const el = document.getElementById(elementId);
+    el.textContent = message;
+    el.classList.remove("hidden");
+    setTimeout(() => el.classList.add("hidden"), 5000);
 }
 
-const unbanBtn = document.getElementById('btn-unban');
-if (unbanBtn) {
-    unbanBtn.onclick = async () => {
-        const input = document.getElementById('admin-user-id');
-        const id = input ? input.value.trim() : '';
-        if (!id) return alert('Введите ID');
-        if (!isAdmin && !isCreator) return alert('Нет прав');
-        await database.ref('banned/' + id).remove();
-        alert('✅ Разбанен');
-    };
+function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
 }
 
-const makeAdminBtn = document.getElementById('btn-make-admin');
-if (makeAdminBtn) {
-    makeAdminBtn.onclick = async () => {
-        const input = document.getElementById('admin-user-id');
-        const id = input ? input.value.trim() : '';
-        if (!id) return alert('Введите ID');
-        if (!isCreator) return alert('Только создатель');
-        const snap = await database.ref('users/' + id).once('value');
-        if (!snap.exists()) return alert('Пользователь не найден');
-        await database.ref('admins/' + id).set({ role: 'admin', name: snap.val().name, addedAt: Date.now() });
-        alert('✅ Админ назначен');
-    };
-}
+// ============ INIT ============
 
-const showUsersBtn = document.getElementById('btn-show-users');
-if (showUsersBtn) {
-    showUsersBtn.onclick = async () => {
-        if (!isAdmin && !isCreator) return alert('Нет прав');
-        const snap = await database.ref('users').once('value');
-        const users = snap.val();
-        const list = document.getElementById('admin-users-list');
-        if (!list) return;
-        let html = '';
-        for (const [id, user] of Object.entries(users || {})) {
-            const banned = await database.ref('banned/' + id).once('value');
-            html += `<div style="padding:4px;border-bottom:1px solid #333;display:flex;justify-content:space-between;">
-                <span>${user.name || 'Без имени'}</span>
-                <span>${banned.exists() ? '🚫' : '✅'}</span>
-            </div>`;
-        }
-        list.innerHTML = html;
-    };
-}
+document.getElementById("themeToggle").addEventListener("click", toggleTheme);
 
-console.log('✅ App.js загружен!');
+document.addEventListener("DOMContentLoaded", () => {
+    initTheme();
+});
